@@ -231,41 +231,34 @@ export const App: React.FC = () => {
                   </div>
                 </div>
 
-                {analyticsLoading ? (
-                  <div className="flex flex-col items-center justify-center py-24 gap-3 text-slate-400">
-                    <RefreshCw className="w-7 h-7 text-cyan-400 animate-spin" />
-                    <span className="text-xs font-mono">Calculando métricas y distribución ({analyticsRange})...</span>
-                  </div>
-                ) : (
-                  <>
-                    <KPICards
-                      kpis={analyticsKPIs || kpis}
-                      timeRangeLabel={
-                        analyticsRange === '24h'
-                          ? '24h'
-                          : analyticsRange === '7d'
-                          ? 'Semana'
-                          : analyticsRange === '30d'
-                          ? 'Mes'
-                          : 'Año'
-                      }
-                    />
-                    <ChartsView
-                      hourlyStats={analyticsHourly.length > 0 ? analyticsHourly : hourlyStats}
-                      regionStats={analyticsRegions.length > 0 ? analyticsRegions : regionStats}
-                      magnitudeStats={analyticsMagnitudes.length > 0 ? analyticsMagnitudes : magnitudeStats}
-                      timeRangeLabel={
-                        analyticsRange === '24h'
-                          ? '24h'
-                          : analyticsRange === '7d'
-                          ? 'Semana'
-                          : analyticsRange === '30d'
-                          ? 'Mes'
-                          : 'Año'
-                      }
-                    />
-                  </>
-                )}
+                <div className={`space-y-6 transition-opacity duration-200 ${analyticsLoading ? 'opacity-60 pointer-events-none' : 'opacity-100'}`}>
+                  <KPICards
+                    kpis={analyticsKPIs || kpis}
+                    timeRangeLabel={
+                      analyticsRange === '24h'
+                        ? '24h'
+                        : analyticsRange === '7d'
+                        ? 'Semana'
+                        : analyticsRange === '30d'
+                        ? 'Mes'
+                        : 'Año'
+                    }
+                  />
+                  <ChartsView
+                    hourlyStats={analyticsHourly}
+                    regionStats={analyticsRegions}
+                    magnitudeStats={analyticsMagnitudes}
+                    timeRangeLabel={
+                      analyticsRange === '24h'
+                        ? '24h'
+                        : analyticsRange === '7d'
+                        ? 'Semana'
+                        : analyticsRange === '30d'
+                        ? 'Mes'
+                        : 'Año'
+                    }
+                  />
+                </div>
               </div>
             )}
             {currentTab === 'catalog' && <EventsCatalog />}

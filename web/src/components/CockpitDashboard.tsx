@@ -50,7 +50,7 @@ export const CockpitDashboard: React.FC<CockpitDashboardProps> = ({
     setFeedRange(newRange);
     setIsUpdating(true);
     try {
-      const data = await api.getEvents({ time_range: newRange, page_size: 100 });
+      const data = await api.getEvents({ time_range: newRange, page_size: 150 });
       if (data && data.items) {
         setFeedEvents(data.items);
       }
@@ -72,7 +72,10 @@ export const CockpitDashboard: React.FC<CockpitDashboardProps> = ({
     if (!isoString) return '--:--';
     try {
       const d = new Date(isoString);
-      return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      if (feedRange === '24h') {
+        return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      }
+      return `${d.toLocaleDateString([], { month: 'short', day: 'numeric' })} ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
     } catch {
       return '--:--';
     }
@@ -159,71 +162,68 @@ export const CockpitDashboard: React.FC<CockpitDashboardProps> = ({
                   <span className="text-[10px] text-slate-500 font-mono">Filtro: {feedRange}</span>
                 </div>
 
-                {isUpdating ? (
-                  <div className="flex flex-col items-center justify-center py-16 gap-3 text-slate-400">
-                    <RefreshCw className="w-6 h-6 text-sky-400 animate-spin" />
-                    <span className="text-xs font-mono">Actualizando telemetría sísmica ({feedRange})...</span>
-                  </div>
-                ) : feedEvents.length === 0 ? (
-                  <div className="text-center py-12 text-slate-500 text-xs">
-                    No hay sismos reportados en el feed para este rango de tiempo
-                  </div>
-                ) : (
-                  feedEvents.map((ev) => {
-                    const isSelected = selectedEvent?.event_id === ev.event_id;
-                    const badgeClasses = getMarkerColor(ev.magnitude);
+                <div className={`space-y-2.5 transition-opacity duration-200 ${isUpdating ? 'opacity-60 pointer-events-none' : 'opacity-100'}`}>
+                  {feedEvents.length === 0 ? (
+                    <div className="text-center py-12 text-slate-500 text-xs">
+                      No hay sismos reportados en el feed para este rango de tiempo
+                    </div>
+                  ) : (
+                    feedEvents.map((ev) => {
+                      const isSelected = selectedEvent?.event_id === ev.event_id;
+                      const badgeClasses = getMarkerColor(ev.magnitude);
 
-                    return (
-                      <div
-                        key={ev.event_id}
-                        onClick={() => setSelectedEvent(ev)}
-                        className={`p-3 rounded-xl border transition-all cursor-pointer ${
-                          isSelected
-                            ? 'bg-sky-500/10 border-sky-500/60 shadow-lg shadow-sky-500/5 ring-1 ring-sky-500/40'
-                            : 'bg-slate-900/60 hover:bg-slate-900 border-slate-800/80 hover:border-slate-700'
-                        }`}
-                      >
-                        <div className="flex items-start justify-between gap-2 mb-1.5">
-                          <span
-                            className={`text-xs font-black px-2 py-0.5 rounded-md border ${badgeClasses}`}
-                          >
-                            M {Number(ev.magnitude).toFixed(1)}
-                          </span>
-                          <span className="text-[10px] font-mono text-slate-500 flex items-center gap-1">
-                            <Clock className="w-3 h-3 text-slate-500" />
-                            {formatEventTime(ev.event_time)}
-                          </span>
+                      return (
+                        <div
+                          key={ev.event_id}
+                          onClick={() => setSelectedEvent(ev)}
+                          className={`p-3 rounded-xl border transition-all cursor-pointer ${
+                            isSelected
+                              ? 'bg-sky-500/10 border-sky-500/60 shadow-lg shadow-sky-500/5 ring-1 ring-sky-500/40'
+                              : 'bg-slate-900/60 hover:bg-slate-900 border-slate-800/80 hover:border-slate-700'
+                          }`}
+                        >
+                          <div className="flex items-start justify-between gap-2 mb-1.5">
+                            <span
+                              className={`text-xs font-black px-2 py-0.5 rounded-md border ${badgeClasses}`}
+                            >
+                              M {Number(ev.magnitude).toFixed(1)}
+                            </span>
+                            <span className="text-[10px] font-mono text-slate-500 flex items-center gap-1">
+                              <Clock className="w-3 h-3 text-slate-500" />
+                              {formatEventTime(ev.event_time)}
+                            </span>
+                          </div>
+
+                          <div className="text-xs font-semibold text-slate-200 line-clamp-1 mb-2">
+                            {ev.place}
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-2 text-[11px] text-slate-400 pt-2 border-t border-slate-800/60">
+                            <div>
+                              Región: <span className="text-slate-300 font-medium">{ev.region || 'Global'}</span>
+                            </div>
+                            <div>
+                              Prof: <span className="text-slate-300 font-medium">{Number(ev.depth_km).toFixed(1)} km</span>
+                            </div>
+                            <div>
+                              Radio PGA: <span className="text-sky-400 font-mono font-medium">{Number(ev.impact_radius_km || 0).toFixed(0)} km</span>
+                            </div>
+                            <div>
+                              Estado: <span className="text-slate-300 capitalize">{ev.status}</span>
+                            </div>
+                          </div>
+
+                          {ev.tsunami_alert && (
+                            <div className="mt-2.5 flex items-center gap-1.5 text-[10px] font-bold text-rose-400 bg-rose-500/10 border border-rose-500/30 px-2 py-1 rounded">
+                              <AlertTriangle className="w-3 h-3" />
+                              ALERTA DE TSUNAMI EMITIDA
+                            </div>
+                          )}
                         </div>
-
-                        <div className="text-xs font-semibold text-slate-200 line-clamp-1 mb-2">
-                          {ev.place}
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-2 text-[11px] text-slate-400 pt-2 border-t border-slate-800/60">
-                          <div>
-                            Región: <span className="text-slate-300 font-medium">{ev.region || 'Global'}</span>
-                          </div>
-                          <div>
-                            Prof: <span className="text-slate-300 font-medium">{Number(ev.depth_km).toFixed(1)} km</span>
-                          </div>
-                          <div>
-                            Radio PGA: <span className="text-sky-400 font-mono font-medium">{Number(ev.impact_radius_km || 0).toFixed(0)} km</span>
-                          </div>
-                          <div>
-                            Estado: <span className="text-slate-300 capitalize">{ev.status}</span>
-                          </div>
-                        </div>
-
-                        {ev.tsunami_alert && (
-                          <div className="mt-2.5 flex items-center gap-1.5 text-[10px] font-bold text-rose-400 bg-rose-500/10 border border-rose-500/30 px-2 py-1 rounded">
-                            <AlertTriangle className="w-3 h-3" />
-                            ALERTA DE TSUNAMI EMITIDA
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })
-                )}
+                      );
+                    })
+                  )}
+                </div>
               </div>
             </div>
           </>

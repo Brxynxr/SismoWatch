@@ -17,7 +17,7 @@ def list_events(
     end_date: Optional[datetime] = Query(None, description="Fecha de fin (ISO 8601)"),
     time_range: Optional[str] = Query(None, pattern="^(24h|7d|30d|1y)$", description="Filtro rápido de tiempo (24h, 7d, 30d, 1y)"),
     page: int = Query(1, ge=1, description="Número de página"),
-    page_size: int = Query(20, ge=1, le=100, description="Tamaño de página"),
+    page_size: int = Query(20, ge=1, le=500, description="Tamaño de página"),
     current_user: UserPayload = Depends(get_current_user)
 ):
     """
