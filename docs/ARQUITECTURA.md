@@ -115,3 +115,30 @@ Sin embargo, para una evolución hacia un producto de datos global de escala pet
 | **Apache Spark** | Cuando el volumen supere **100 GB/día** o se integren redes de sensores sísmicos IoT de alta frecuencia (miles de lecturas por segundo) que desborden la memoria/CPU de un único nodo PostgreSQL. | Permite procesamiento paralelo distribuido en clúster (RDDs y Spark DataFrames) para agregaciones geoespaciales complejas y cálculo de matrices de covarianza a escala sin estrangular la base de datos relacional. |
 | **Object Storage (S3 / MinIO)** | Cuando el historial acumulado supere **500 GB** o se requiera desacoplar almacenamiento de cómputo para auditoría regulatoria de largo plazo. | Permite archivar la capa Bronze en formato columnar comprimido (**Apache Parquet con compresión Snappy/ZSTD**), reduciendo costos de almacenamiento en un 80% y habilitando consultas federadas mediante Trino o Athena sin impactar el disco local. |
 | **Catálogo de Linaje (Atlas / OpenMetadata)** | Cuando la organización crezca a **más de 15 pipelines interdependientes** y múltiples equipos interdisciplinarios (Data Engineering, Data Science, Compliance) consuman y publiquen datos. | Centraliza la gobernanza empresarial, catálogo de términos de negocio, control de linaje automatizado columna por columna (column-level lineage) y auditoría de accesos PII/sensibles en una plataforma corporativa unificada. |
+
+
+---
+
+## 7. Elementos Diferenciadores de SismoWatch (Innovación y Valor de Negocio)
+
+Para transformar un pipeline estándar en una solución de monitoreo de grado empresarial, SismoWatch implementa tres capacidades diferenciadoras:
+
+### 1. Simulador Geoespacial de Impacto Sísmico (Radio Teórico de Aceleración PGA)
+En lugar de únicamente mostrar marcadores estáticos en las coordenadas del epicentro, SismoWatch calcula en la capa Gold el **radio de percepción teórica** en kilómetros donde la aceleración del terreno ($PGA$) superó el umbral perceptible de la Escala de Intensidad Mercalli Modificada (MMI III+), basándose en la relación empírica de atenuación sísmica:
+$$R_{\text{impacto}} = 10^{(0.45 \times \text{magnitud} - 0.8)}$$
+En la plataforma web (Leaflet), se dibuja dinámicamente un radio de cobertura semitransparente que permite a los operadores de riesgo estimar de un vistazo qué infraestructuras y ciudades se vieron comprometidas.
+
+### 2. Proof of Grounding & Explainable AI en el Asistente Conversacional
+Cada respuesta analítica generada por el agente local (`qwen2.5-coder:1.5b`) incluye una tarjeta de auditoría transparente que expone:
+* La sentencia SQL exacta generada y ejecutada sobre `curated.v_events_chat`.
+* El rol de base de datos (`role_chat_reader`) con su restricción de solo lectura y timeout.
+* La latencia de ejecución en milisegundos en PostgreSQL.
+* El porcentaje de coincidencia numérica verificado por el guardrail numérico (cero alucinaciones).
+
+### 3. Medidor Dinámico de SLA de Frescura y Circuit Breaker (Chaos Testing)
+Un widget en el Dashboard mide en tiempo real la frescura de los datos frente al SLA estricto de 5 minutos. Además, el sistema incorpora un mecanismo de contingencia (*Circuit Breaker*) que conmuta a una réplica local validada ante caídas o rate-limiting de la API pública del USGS, garantizando **cero pantallas en blanco**.
+
+---
+
+## 8. Gobernanza y Linaje con OpenMetadata
+Para garantizar trazabilidad empresarial y catalogación de metadatos, SismoWatch incorpora compatibilidad nativa con **OpenMetadata**. Toda la arquitectura de linaje, catálogo de schemas Medallion y mapeo de pruebas de calidad Pandera se encuentra documentada en [docs/OPENMETADATA.md](OPENMETADATA.md).

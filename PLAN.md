@@ -508,3 +508,17 @@ Para defender ante el jurado por qué **NO** se incluyeron Spark, MinIO ni Atlas
    * **Apache Spark:** Se incorporará cuando el volumen supere 100 GB/día o se requiera procesar streams IoT de acelerómetros de alta frecuencia que excedan la capacidad de un único nodo.
    * **Object Storage (S3 / MinIO):** Se incorporará cuando el almacenamiento de Bronze deba persistirse indefinidamente en formato Parquet particionado por fecha/año, abaratando almacenamiento en un 80%.
    * **Apache Atlas / OpenMetadata:** Se incorporará cuando el catálogo supere los 15 datasets transversales y existan equipos federados de datos requiriendo linaje automático a nivel de columna.
+
+
+---
+
+## 13. Elementos Diferenciadores y Gobernanza con OpenMetadata
+
+* **Modelo Local Aprobado:** `qwen2.5-coder:1.5b` (100% SQL, 100% numérico en español, 2.3s latencia, 13.5 TPS, 986 MB en disco).
+* **3 Elementos Diferenciadores Incorporados:**
+  1. *Radio Teórico de Impacto Sísmico (PGA & MMI III+):* Cálculo geométrico de afectación geoespacial.
+  2. *Proof of Grounding:* Transparencia y trazabilidad total del SQL y cifras en el chat.
+  3. *SLA de Frescura y Circuit Breaker:* Resiliencia activa ante caídas de la fuente USGS.
+* **Gobernanza con OpenMetadata:**
+  * Especificación técnica documentada en `docs/OPENMETADATA.md`.
+  * Emisor de linaje y metadatos en `airflow/include/openmetadata_emitter.py`.
