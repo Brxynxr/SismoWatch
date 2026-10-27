@@ -128,6 +128,49 @@ services:
       start_period: 30s
 
   # ----------------------------------------------------------------------------
+  # FastAPI Backend (REST API, JWT Auth, SSE Streaming & AI Agent)
+  # ----------------------------------------------------------------------------
+  api:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    container_name: sismowatch-api
+    restart: unless-stopped
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: ${POSTGRES_PORT:-5432}
+      POSTGRES_DB: ${POSTGRES_DB:-sismowatch_db}
+      DB_API_READER_USER: ${DB_API_READER_USER:-user_api_reader}
+      DB_API_READER_PASSWORD: ${DB_API_READER_PASSWORD:-api_reader_secret_pwd_2026}
+      DB_CHAT_READER_USER: ${DB_CHAT_READER_USER:-user_chat_reader}
+      DB_CHAT_READER_PASSWORD: ${DB_CHAT_READER_PASSWORD:-chat_reader_secret_pwd_2026}
+      DB_API_LOGGER_USER: ${DB_API_LOGGER_USER:-user_api_logger}
+      DB_API_LOGGER_PASSWORD: ${DB_API_LOGGER_PASSWORD:-api_logger_secret_pwd_2026}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-sismowatch-super-secret-jwt-key-minimum-32-chars-long!}
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin_sismowatch_2026_pwd}
+      VIEWER_USERNAME: ${VIEWER_USERNAME:-viewer}
+      VIEWER_PASSWORD: ${VIEWER_PASSWORD:-viewer_sismowatch_2026_pwd}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2.5-coder:1.5b}
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
+      GROQ_MODEL: ${GROQ_MODEL:-llama-3.1-8b-instant}
+      AIRFLOW_URL: http://airflow-webserver:8080
+      AIRFLOW_ADMIN_USER: ${AIRFLOW_ADMIN_USER:-admin}
+      AIRFLOW_ADMIN_PASSWORD: ${AIRFLOW_ADMIN_PASSWORD:-admin}
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./api:/app
+    depends_on:
+      postgres:
+        condition: service_healthy
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - sismowatch-net
+
+  # ----------------------------------------------------------------------------
   # Ollama (Servicio Opcional para entornos sin Ollama en Host)
   # ----------------------------------------------------------------------------
   ollama:
