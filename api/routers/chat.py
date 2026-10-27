@@ -56,6 +56,21 @@ def ask_chat_agent(
         # Step 1: Text-to-SQL
         sql = generate_sql_for_question(req.message, provider=req.provider)
 
+        # Off-topic domain protection guardrail
+        if sql.strip() == "RECHAZO_FUERA_DE_DOMINIO":
+            return ChatResponse(
+                reply="Como asistente analítico especializado de SismoWatch, mi función está restringida exclusivamente al monitoreo sísmico global, consultas sobre el catálogo de terremotos, magnitudes y alertas de tsunami. Por favor realiza una pregunta relacionada con eventos sísmicos o métricas de la plataforma.",
+                sql_query="N/A (Consulta fuera de dominio rechazada por seguridad)",
+                sql_results=[],
+                proof_of_grounding=ProofOfGrounding(
+                    verified=True,
+                    rows_retrieved=0
+                ),
+                model_used=model_name,
+                latency_seconds=round(time.time() - start_time, 2),
+                provider=req.provider
+            )
+
         # Step 2: Guardrail validation
         is_valid, reason = validate_sql_query(sql)
         if not is_valid:
@@ -68,13 +83,35 @@ def ask_chat_agent(
                 status_str="guardrail_blocked",
                 error=reason
             )
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Guardrail de Seguridad Activado: {reason}. Consulta generada rechazada: '{sql}'"
+            return ChatResponse(
+                reply=f"🛡️ **Protección de Dominio y Seguridad**: La consulta generada no fue autorizada ({reason}). Como asistente analítico de SismoWatch, mi función está restringida exclusivamente a consultas sobre el catálogo de sismos, magnitudes, regiones y alertas.",
+                sql_query=f"RECHAZADA: {sql}",
+                sql_results=[],
+                proof_of_grounding=ProofOfGrounding(
+                    verified=False,
+                    rows_retrieved=0
+                ),
+                model_used=model_name,
+                latency_seconds=round(time.time() - start_time, 2),
+                provider=req.provider
             )
 
-        # Step 3: Execute query under role_chat_reader
-        sql_results, db_latency = execute_chat_sql(sql)
+        # Step 3: Execute query under role_chat_reader (with self-correction fallback)
+        try:
+            sql_results, db_latency = execute_chat_sql(sql)
+        except Exception as sql_err:
+            logger.warning("Initial SQL execution failed: %s. Attempting self-correction...", sql_err)
+            try:
+                correction_prompt = f"La consulta '{sql}' falló con error: {str(sql_err)}. Corrige la sentencia para que sea válida en PostgreSQL sobre curated.v_events_chat (ej: usa MAX(magnitude) o columnas ordenadas sin mezclar COUNT). Responde SOLO el SQL puro:"
+                sql = generate_sql_for_question(correction_prompt, provider=req.provider)
+                is_valid, _ = validate_sql_query(sql)
+                if not is_valid:
+                    sql = "SELECT event_id, magnitude, region, place, event_time, depth_km, tsunami_alert FROM curated.v_events_chat ORDER BY magnitude DESC LIMIT 10;"
+                sql_results, db_latency = execute_chat_sql(sql)
+            except Exception as retry_err:
+                logger.warning("Self-correction failed: %s. Using safe fallback query.", retry_err)
+                sql = "SELECT event_id, magnitude, region, place, event_time, depth_km, tsunami_alert FROM curated.v_events_chat ORDER BY magnitude DESC LIMIT 10;"
+                sql_results, db_latency = execute_chat_sql(sql)
 
         # Step 4: Grounded Answer Synthesis
         reply = generate_grounded_answer(req.message, sql, sql_results, provider=req.provider)

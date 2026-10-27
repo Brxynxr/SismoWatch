@@ -42,7 +42,7 @@ class Settings(BaseSettings):
 
     # Cloud AI (Groq - Optional)
     GROQ_API_KEY: str = os.getenv("GROQ_API_KEY", "")
-    GROQ_MODEL: str = os.getenv("GROQ_MODEL", "llama-3.1-8b-instant")
+    GROQ_MODEL: str = os.getenv("GROQ_MODEL", "qwen/qwen3.8-27b")
 
     # Airflow Trigger API
     AIRFLOW_URL: str = os.getenv("AIRFLOW_URL", "http://localhost:8080")

@@ -17,19 +17,16 @@ SQL_GUARDRAIL_PATTERN = re.compile(
 
 V_EVENTS_CHAT_SCHEMA = """
 Vista de solo lectura permitida: curated.v_events_chat
-Columnas disponibles:
+Columnas disponibles (ÚNICAMENTE ESTAS):
 - event_id (TEXT): Identificador único del sismo.
-- latitude (FLOAT): Latitud (-90 a 90).
-- longitude (FLOAT): Longitud (-180 a 180).
-- depth_km (FLOAT): Profundidad en kilómetros.
 - magnitude (FLOAT): Magnitud en escala Richter/Momento.
-- magnitude_class (TEXT): 'Micro', 'Minor', 'Light', 'Moderate', 'Strong', 'Major', 'Great'.
+- magnitude_class (TEXT): 'Micro', 'Menor', 'Ligero', 'Moderado', 'Fuerte', 'Mayor', 'Gran Sismo'.
 - place (TEXT): Descripción del lugar (ej. '13 km N of Borrego Springs, CA').
-- region (TEXT): Región geográfica normalizada (ej. 'California', 'Chile', 'Japón').
+- region (TEXT): Región geográfica normalizada (ej. 'California', 'Chile', 'Alaska').
 - impact_radius_km (FLOAT): Radio estimado de afectación superficial en km.
 - event_time (TIMESTAMPTZ): Fecha y hora UTC del sismo.
-- tsunami (INT): 1 si generó alerta de tsunami, 0 si no.
-- alert (TEXT): Nivel de alerta PAGER ('green', 'yellow', 'orange', 'red', o null).
+- depth_km (FLOAT): Profundidad en kilómetros.
+- tsunami_alert (BOOLEAN): true si generó alerta de tsunami, false si no.
 - status (TEXT): 'reviewed' o 'automatic'.
 """
 
@@ -157,13 +154,11 @@ Tu tarea es traducir la pregunta del usuario a UNA sentencia SQL de solo lectura
 {V_EVENTS_CHAT_SCHEMA}
 
 REGLAS ESTRICTAS:
-1. Responde ÚNICAMENTE con la sentencia SQL pura.
-2. NO incluyas formato markdown (ni ```sql ni ```).
-3. Debe ser SOLO una sentencia SELECT.
-4. Consulta ÚNICAMENTE la vista 'curated.v_events_chat'.
-5. Si piden el sismo más fuerte: ORDER BY magnitude DESC LIMIT 1.
-6. Si piden eventos recientes: ORDER BY event_time DESC LIMIT 10.
-7. Si piden conteos: usa COUNT(*) y GROUP BY si corresponde.
+1. Responde ÚNICAMENTE con la sentencia SQL pura, sin formato markdown (ni ```sql ni ```).
+2. Consulta ÚNICAMENTE la vista 'curated.v_events_chat'.
+3. Para conteos usa COUNT(*). Para eventos recientes o mayor magnitud usa ORDER BY.
+4. Si la pregunta es sobre sismos, eventos, magnitudes o la base de datos, genera SIEMPRE la consulta SQL.
+5. ÚNICAMENTE si la pregunta es explícitamente sobre temas ajenos (como fútbol, cocina, celebridades como Messi, chistes o política), responde: RECHAZO_FUERA_DE_DOMINIO
 """
     raw_response = query_llm(user_question, system_prompt, provider=provider)
     # Strip markdown code fences if model included them
@@ -175,15 +170,15 @@ def generate_grounded_answer(user_question: str, sql_query: str, sql_results: Li
     # Serialize results to readable JSON
     results_str = json.dumps(sql_results[:15], default=str, indent=2, ensure_ascii=False)
 
-    system_prompt = """Eres el Asistente Experto de SismoWatch para monitoreo sísmico.
-Tu misión es explicar los resultados obtenidos de la base de datos de manera clara, concisa y profesional en español.
+    system_prompt = """Eres el Asistente Experto de SismoWatch para monitoreo sísmico en tiempo real.
+Tu misión es responder a la pregunta del usuario de manera natural, fluida, conversacional y profesional en español, explicando los resultados obtenidos de la base de datos.
 
-REGLAS DE RIGOR CIENTÍFICO (CERO ALUCINACIONES):
-1. Basa tu respuesta EXCLUSIVAMENTE en los datos de la consulta SQL provista.
-2. NUNCA inventes números, magnitudes, regiones ni fechas. Todas las cifras deben coincidir exactamente con los datos.
-3. Menciona la cantidad de eventos, la magnitud máxima y las regiones destacadas si aplica.
-4. Si la consulta devolvió 0 resultados, explica claramente que no se encontraron eventos con esos filtros.
-5. Mantén un tono formal, técnico y conciso.
+PAUTAS DE REDACCIÓN NATURAL Y RIGOR CIENTÍFICO (CERO ALUCINACIONES):
+1. Redacta de forma explicativa, fluida y humana en español (por ejemplo: "En las últimas 24 horas se registraron X eventos sísmicos en la red de monitoreo. El evento más significativo tuvo una magnitud de [M] localizado en [Región] a una profundidad de [h] km...").
+2. Basa tu respuesta EXCLUSIVAMENTE en los datos de la consulta SQL provista. NUNCA inventes números, magnitudes, regiones ni fechas. Todas las cifras deben coincidir exactamente con los datos devueltos.
+3. Si la consulta devolvió 0 resultados, explica con amabilidad y naturalidad que tras consultar el catálogo no se registran eventos que coincidan con esos criterios.
+4. Si hay eventos con alerta de tsunami (tsunami = 1) o alerta de color (yellow, orange, red), resáltalos claramente como advertencia de protección civil.
+5. No expongas sintaxis técnica de SQL ni JSON crudo; entrega un reporte ejecutivo claro para el analista de riesgos.
 """
     user_prompt = f"""Pregunta del usuario: {user_question}
 
@@ -193,6 +188,6 @@ Consulta SQL ejecutada:
 Resultados obtenidos de la base de datos (Gold):
 {results_str}
 
-Responde a la pregunta en español rigurosamente grounded en estos resultados:"""
+Responde a la pregunta en español de forma natural y rigurosamente grounded en estos resultados:"""
 
     return query_llm(user_prompt, system_prompt, provider=provider)
