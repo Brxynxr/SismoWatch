@@ -9,3 +9,4 @@ dist/
 .pytest_cache/
 *.log
 *.pdf
+airflow/logs/

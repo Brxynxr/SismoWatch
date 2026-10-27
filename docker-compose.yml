@@ -1,0 +1,154 @@
+x-airflow-common: &airflow-common
+  build:
+    context: ./airflow
+    dockerfile: Dockerfile
+  image: sismowatch-airflow:2.10.0
+  environment: &airflow-common-env
+    AIRFLOW__CORE__EXECUTOR: LocalExecutor
+    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres_master_secure_pwd_2026}@postgres:5432/airflow_db
+    AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW__CORE__FERNET_KEY:-fnYNhvG63iR6zOu-5-PcFZvQfSlcES1IQ6C1BTseu_w=}
+    AIRFLOW__CORE__SECRET_KEY: ${AIRFLOW__CORE__SECRET_KEY:-sismowatch_web_secret_key_random_2026_xYz}
+    AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
+    AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: 'false'
+    AIRFLOW__API__AUTH_BACKENDS: 'airflow.api.auth.backend.basic_auth'
+    AIRFLOW__SCHEDULER__MIN_FILE_PROCESS_INTERVAL: 10
+    # Base de datos operacional de la aplicación
+    POSTGRES_HOST: postgres
+    POSTGRES_PORT: ${POSTGRES_PORT:-5432}
+    POSTGRES_DB: ${POSTGRES_DB:-sismowatch_db}
+    DB_INGESTION_USER: ${DB_INGESTION_USER:-user_ingestion}
+    DB_INGESTION_PASSWORD: ${DB_INGESTION_PASSWORD:-ingestion_secret_pwd_2026}
+    DB_TRANSFORMATION_USER: ${DB_TRANSFORMATION_USER:-user_transformation}
+    DB_TRANSFORMATION_PASSWORD: ${DB_TRANSFORMATION_PASSWORD:-transformation_secret_pwd_2026}
+    FAILURE_ALERT_WEBHOOK_URL: ${FAILURE_ALERT_WEBHOOK_URL:-https://httpbin.org/post}
+    OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+    OLLAMA_MODEL: ${OLLAMA_MODEL:-phi3:latest}
+    PYTHONPATH: /opt/airflow
+  volumes:
+    - ./airflow/dags:/opt/airflow/dags
+    - ./airflow/include:/opt/airflow/include
+    - ./airflow/logs:/opt/airflow/logs
+  extra_hosts:
+    - "host.docker.internal:host-gateway"
+  networks:
+    - sismowatch-net
+
+services:
+  # ----------------------------------------------------------------------------
+  # PostgreSQL 16 - Motor Central de Almacenamiento Medallion y Airflow
+  # ----------------------------------------------------------------------------
+  postgres:
+    image: postgres:16-alpine
+    container_name: sismowatch-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-sismowatch_db}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres_master_secure_pwd_2026}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./db/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-sismowatch_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+    networks:
+      - sismowatch-net
+
+  # ----------------------------------------------------------------------------
+  # Airflow Init - Inicialización de Metadatos y Usuario Administrador
+  # ----------------------------------------------------------------------------
+  airflow-init:
+    <<: *airflow-common
+    container_name: sismowatch-airflow-init
+    entrypoint: /entrypoint
+    command:
+      - bash
+      - -c
+      - |
+        echo "Inicializando base de datos de Airflow..."
+        airflow db migrate
+        airflow users create \
+          --username "${_AIRFLOW_WWW_USER_USERNAME:-sismo_admin}" \
+          --password "${_AIRFLOW_WWW_USER_PASSWORD:-sismo_admin_secure_pwd_2026}" \
+          --firstname Admin \
+          --lastname SismoWatch \
+          --role Admin \
+          --email admin@sismowatch.internal || true
+        echo "Inicialización de Airflow completada exitosamente."
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  # ----------------------------------------------------------------------------
+  # Airflow Webserver - Interfaz Gráfica y API REST
+  # ----------------------------------------------------------------------------
+  airflow-webserver:
+    <<: *airflow-common
+    container_name: sismowatch-airflow-webserver
+    restart: unless-stopped
+    command: airflow webserver
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      airflow-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "curl -Lf http://localhost:8080/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # ----------------------------------------------------------------------------
+  # Airflow Scheduler - Planificador de Tareas y Orquestador
+  # ----------------------------------------------------------------------------
+  airflow-scheduler:
+    <<: *airflow-common
+    container_name: sismowatch-airflow-scheduler
+    restart: unless-stopped
+    command: airflow scheduler
+    depends_on:
+      postgres:
+        condition: service_healthy
+      airflow-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "airflow jobs check --job-type SchedulerJob --hostname \"$${HOSTNAME}\""]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  # ----------------------------------------------------------------------------
+  # Ollama (Servicio Opcional para entornos sin Ollama en Host)
+  # ----------------------------------------------------------------------------
+  ollama:
+    image: ollama/ollama:latest
+    container_name: sismowatch-ollama
+    profiles:
+      - ai
+    ports:
+      - "11435:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    networks:
+      - sismowatch-net
+
+volumes:
+  postgres_data:
+    name: sismowatch_postgres_data
+  ollama_data:
+    name: sismowatch_ollama_data
+
+networks:
+  sismowatch-net:
+    name: sismowatch_network
+    driver: bridge
