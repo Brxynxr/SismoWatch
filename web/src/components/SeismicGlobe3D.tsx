@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import Globe, { GlobeMethods } from 'react-globe.gl';
 import { EarthquakeEvent } from '../types';
-import { RotateCcw, ShieldAlert, Waves, ZoomIn, ZoomOut, Compass } from 'lucide-react';
+import { RotateCcw, ShieldAlert, Waves, ZoomIn, ZoomOut, Compass, Layers } from 'lucide-react';
 
 interface SeismicGlobe3DProps {
   events: EarthquakeEvent[];
@@ -18,6 +18,7 @@ export const SeismicGlobe3D: React.FC<SeismicGlobe3DProps> = ({
   const containerRef = useRef<HTMLDivElement>(null);
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
   const [isRotating, setIsRotating] = useState<boolean>(true);
+  const [showAllBeacons, setShowAllBeacons] = useState<boolean>(false);
 
   // Resize handler for responsive WebGL canvas
   useEffect(() => {
@@ -156,18 +157,18 @@ export const SeismicGlobe3D: React.FC<SeismicGlobe3DProps> = ({
         showAtmosphere={true}
         atmosphereColor="#38bdf8"
         atmosphereAltitude={0.16}
-        // Option 2: Sci-Fi Laser Beacons Layer
+        // Earthquake Epicenters (Surface Buttons + Laser Beam on Click)
         pointsData={events}
         pointLat={(d: any) => d.latitude}
         pointLng={(d: any) => d.longitude}
-        pointAltitude={(d: any) =>
-          d.event_id === selectedEvent?.event_id
-            ? 0.42
-            : Math.max(0.06, (d.magnitude / 10) * 0.35)
-        }
-        pointRadius={(d: any) =>
-          d.event_id === selectedEvent?.event_id ? 0.22 : 0.075
-        }
+        pointAltitude={(d: any) => {
+          if (d.event_id === selectedEvent?.event_id) return 0.42;
+          return showAllBeacons ? Math.max(0.06, (d.magnitude / 10) * 0.35) : 0;
+        }}
+        pointRadius={(d: any) => {
+          if (d.event_id === selectedEvent?.event_id) return 0.25;
+          return showAllBeacons ? 0.08 : Math.max(0.4, (d.magnitude / 10) * 0.85);
+        }}
         pointColor={(d: any) =>
           d.event_id === selectedEvent?.event_id
             ? '#00f5ff'
@@ -207,7 +208,7 @@ export const SeismicGlobe3D: React.FC<SeismicGlobe3DProps> = ({
 
         <button
           onClick={() => setIsRotating(!isRotating)}
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border backdrop-blur text-xs font-medium shadow-lg transition-colors ${
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border backdrop-blur text-xs font-medium shadow-lg transition-colors cursor-pointer ${
             isRotating
               ? 'bg-sky-500/20 text-sky-300 border-sky-500/30'
               : 'bg-slate-900/80 text-slate-400 border-slate-700/80 hover:text-white'
@@ -216,6 +217,19 @@ export const SeismicGlobe3D: React.FC<SeismicGlobe3DProps> = ({
         >
           <Compass className={`w-3.5 h-3.5 ${isRotating ? 'animate-spin' : ''}`} />
           {isRotating ? 'Auto-Rotación: ON' : 'Auto-Rotación: OFF'}
+        </button>
+
+        <button
+          onClick={() => setShowAllBeacons(!showAllBeacons)}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border backdrop-blur text-xs font-medium shadow-lg transition-colors cursor-pointer ${
+            showAllBeacons
+              ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40'
+              : 'bg-slate-900/80 text-slate-400 border-slate-700/80 hover:text-white'
+          }`}
+          title="Alternar entre ver balizas solo al hacer clic o en todos los sismos"
+        >
+          <Layers className="w-3.5 h-3.5 text-cyan-400" />
+          {showAllBeacons ? 'Balizas: Todas' : 'Baliza: Al Clic'}
         </button>
       </div>
 
@@ -244,8 +258,8 @@ export const SeismicGlobe3D: React.FC<SeismicGlobe3DProps> = ({
           </div>
         </div>
         <div className="text-[10px] text-cyan-400 font-mono border-t border-slate-800 pt-1 flex items-center justify-between">
-          <span>◎ Balizas verticales = Altura ∝ Magnitud</span>
-          <span className="text-slate-400">🎯 Clic enfoca</span>
+          <span>◎ Clic en sismo proyecta su línea láser vertical</span>
+          <span className="text-slate-400">🎯 Focaliza</span>
         </div>
       </div>
     </div>

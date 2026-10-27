@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { LeftDock } from './components/LeftDock';
 import { CockpitDashboard } from './components/CockpitDashboard';
+import { KPICards } from './components/KPICards';
+import { ChartsView } from './components/ChartsView';
 import { EventsCatalog } from './components/EventsCatalog';
 import { ReportsView } from './components/ReportsView';
 import { QuarantineAdmin } from './components/QuarantineAdmin';
@@ -8,7 +10,7 @@ import { FloatingChatAssistant } from './components/FloatingChatAssistant';
 import { LoginModal } from './components/LoginModal';
 import { User, KPIs, EarthquakeEvent, HourlyStat, RegionStat, MagnitudeStat } from './types';
 import { api, getStoredUser, setStoredUser } from './services/api';
-import { Database, FileText, AlertTriangle, X } from 'lucide-react';
+import { Database, FileText, AlertTriangle, X, BarChart3 } from 'lucide-react';
 
 export const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(getStoredUser());
@@ -110,11 +112,20 @@ export const App: React.FC = () => {
         isLive={isLive}
       />
 
-      {/* 2. Slide-Out Drawer Panel (Catálogo, Reportes, Cuarentena) */}
+      {/* 2. Slide-Out Drawer Panel (Catálogo, Analítica, Reportes, Cuarentena) */}
       {currentTab !== 'dashboard' && (
-        <div className="absolute top-0 left-16 sm:left-18 h-full w-[640px] xl:w-[760px] 2xl:w-[840px] max-w-[calc(100vw-5rem)] z-30 bg-slate-950/95 backdrop-blur-2xl border-r border-slate-800 shadow-2xl flex flex-col animate-in slide-in-from-left duration-200">
+        <div className="absolute top-0 left-16 sm:left-18 h-full w-[640px] xl:w-[780px] 2xl:w-[860px] max-w-[calc(100vw-5rem)] z-30 bg-slate-950/95 backdrop-blur-2xl border-r border-slate-800 shadow-2xl flex flex-col animate-in slide-in-from-left duration-200">
           <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-800 bg-slate-900/80">
             <div className="flex items-center gap-2.5">
+              {currentTab === 'analytics' && (
+                <>
+                  <BarChart3 className="w-4 h-4 text-cyan-400" />
+                  <div>
+                    <h3 className="font-bold text-sm text-slate-100">Analítica Sísmica & KPIs</h3>
+                    <p className="text-[10px] text-slate-400">Telemetría histórica, distribución regional y métricas</p>
+                  </div>
+                </>
+              )}
               {currentTab === 'catalog' && (
                 <>
                   <Database className="w-4 h-4 text-cyan-400" />
@@ -153,6 +164,16 @@ export const App: React.FC = () => {
           </div>
 
           <div className="flex-1 overflow-y-auto p-4 sm:p-5 custom-scrollbar">
+            {currentTab === 'analytics' && (
+              <div className="space-y-6">
+                <KPICards kpis={kpis} />
+                <ChartsView
+                  hourlyStats={hourlyStats}
+                  regionStats={regionStats}
+                  magnitudeStats={magnitudeStats}
+                />
+              </div>
+            )}
             {currentTab === 'catalog' && <EventsCatalog />}
             {currentTab === 'reports' && <ReportsView user={user} />}
             {currentTab === 'quarantine' && user.role === 'admin' && <QuarantineAdmin />}

@@ -2,6 +2,7 @@ import React from 'react';
 import {
   Globe2,
   Database,
+  BarChart3,
   FileText,
   AlertTriangle,
   LogOut,
@@ -33,6 +34,12 @@ export const LeftDock: React.FC<LeftDockProps> = ({
       label: 'Cockpit 3D (Globo)',
       description: 'Centro de monitoreo global 3D en tiempo real',
       icon: Globe2
+    },
+    {
+      id: 'analytics',
+      label: 'Analítica y KPIs',
+      description: 'Métricas de calidad, gráficos y distribución',
+      icon: BarChart3
     },
     {
       id: 'catalog',

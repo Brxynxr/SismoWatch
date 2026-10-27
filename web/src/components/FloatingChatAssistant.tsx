@@ -127,14 +127,10 @@ export const FloatingChatAssistant: React.FC = () => {
       {!isOpen && (
         <button
           onClick={() => setIsOpen(true)}
-          className="group relative flex items-center justify-center w-13 h-13 sm:w-14 sm:h-14 rounded-full bg-gradient-to-tr from-sky-600 via-indigo-600 to-cyan-500 text-white shadow-2xl hover:scale-110 hover:shadow-cyan-500/30 transition-all border border-cyan-400/40 focus:outline-none cursor-pointer"
+          className="group relative flex items-center justify-center w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-gradient-to-tr from-sky-600 via-indigo-600 to-cyan-500 text-white shadow-2xl hover:scale-110 hover:shadow-cyan-500/30 transition-all border border-cyan-400/40 focus:outline-none cursor-pointer"
           title="Asistente IA Grounded"
           aria-label="Abrir Asistente IA"
         >
-          <span className="relative flex h-3 w-3 absolute -top-0.5 -right-0.5">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-            <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500 border-2 border-slate-900"></span>
-          </span>
           <Bot className="w-6 h-6 text-white group-hover:rotate-6 transition-transform" />
         </button>
       )}
