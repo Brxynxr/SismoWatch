@@ -45,7 +45,7 @@ async def event_stream(token: Optional[str] = Query(None)):
 
                         # Top 5 most recent events
                         cur.execute("""
-                            SELECT event_id, latitude, longitude, magnitude, magnitude_class,
+                            SELECT event_id, latitude, longitude, depth_km, magnitude, magnitude_class,
                                    place, region, impact_radius_km, event_time, tsunami_alert, status
                             FROM curated.earthquakes
                             ORDER BY event_time DESC

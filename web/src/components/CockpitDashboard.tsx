@@ -37,22 +37,27 @@ export const CockpitDashboard: React.FC<CockpitDashboardProps> = ({
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(true);
   const [feedEvents, setFeedEvents] = useState<EarthquakeEvent[]>(events);
   const [feedRange, setFeedRange] = useState<string>('24h');
+  const [totalRegistered, setTotalRegistered] = useState<number>(kpis?.total_events_24h ?? events.length);
   const [isUpdating, setIsUpdating] = useState<boolean>(false);
 
   // Sync when initial events prop updates (e.g. from SSE or initial fetch)
   useEffect(() => {
     if (feedRange === '24h') {
       setFeedEvents(events);
+      if (kpis?.total_events_24h !== undefined) {
+        setTotalRegistered(kpis.total_events_24h);
+      }
     }
-  }, [events, feedRange]);
+  }, [events, kpis, feedRange]);
 
   const handleFeedRangeChange = async (newRange: string) => {
     setFeedRange(newRange);
     setIsUpdating(true);
     try {
       const data = await api.getEvents({ time_range: newRange, page_size: 150 });
-      if (data && data.items) {
-        setFeedEvents(data.items);
+      if (data) {
+        if (data.items) setFeedEvents(data.items);
+        if (typeof data.total === 'number') setTotalRegistered(data.total);
       }
     } catch (err) {
       console.error("Error loading feed for range:", err);
@@ -125,18 +130,17 @@ export const CockpitDashboard: React.FC<CockpitDashboardProps> = ({
                     {isUpdating && <RefreshCw className="w-3 h-3 text-sky-400 animate-spin" />}
                   </h3>
                 </div>
-                <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-slate-900 border border-slate-800 text-sky-400 font-semibold">
-                  {feedEvents.length} Sismos en Red
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-slate-900 border border-slate-800 text-slate-400">
+                  USGS Live Feed
                 </span>
               </div>
 
-              {/* Feed Time Range Filter */}
-              <div className="grid grid-cols-4 gap-1 bg-slate-900/90 p-1 rounded-lg border border-slate-800/80 text-[11px]">
+              {/* Feed Time Range Filter - Solo 24h, Semana y Mes */}
+              <div className="grid grid-cols-3 gap-1 bg-slate-900/90 p-1 rounded-lg border border-slate-800/80 text-[11px]">
                 {[
-                  { id: '24h', label: '24h' },
+                  { id: '24h', label: '24 Horas' },
                   { id: '7d', label: 'Semana' },
-                  { id: '30d', label: 'Mes' },
-                  { id: '1y', label: 'Año' }
+                  { id: '30d', label: 'Mes' }
                 ].map((item) => (
                   <button
                     key={item.id}
@@ -151,6 +155,29 @@ export const CockpitDashboard: React.FC<CockpitDashboardProps> = ({
                     {item.label}
                   </button>
                 ))}
+              </div>
+
+              {/* Apartado Sismos Registrados */}
+              <div className="flex items-center justify-between p-2.5 rounded-xl bg-slate-900/90 border border-slate-800 shadow-inner">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-1.5 rounded-lg bg-sky-500/10 border border-sky-500/30 text-sky-400">
+                    <Activity className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <span className="text-[10px] uppercase font-mono tracking-wider text-slate-400 block leading-tight">
+                      Sismos Registrados
+                    </span>
+                    <span className="text-sm font-bold font-mono text-slate-100">
+                      {totalRegistered.toLocaleString()} sismos
+                    </span>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <span className="text-[10px] font-mono text-slate-400 block leading-tight">En Visor 3D</span>
+                  <span className="text-xs font-mono font-semibold text-sky-400">
+                    {feedEvents.length} balizas
+                  </span>
+                </div>
               </div>
             </div>
 
@@ -203,7 +230,7 @@ export const CockpitDashboard: React.FC<CockpitDashboardProps> = ({
                               Región: <span className="text-slate-300 font-medium">{ev.region || 'Global'}</span>
                             </div>
                             <div>
-                              Prof: <span className="text-slate-300 font-medium">{Number(ev.depth_km).toFixed(1)} km</span>
+                              Prof: <span className="text-slate-300 font-medium">{ev.depth_km !== undefined && ev.depth_km !== null && !isNaN(Number(ev.depth_km)) ? `${Number(ev.depth_km).toFixed(1)} km` : '--'}</span>
                             </div>
                             <div>
                               Radio PGA: <span className="text-sky-400 font-mono font-medium">{Number(ev.impact_radius_km || 0).toFixed(0)} km</span>

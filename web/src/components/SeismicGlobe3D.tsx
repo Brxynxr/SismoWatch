@@ -133,7 +133,7 @@ export const SeismicGlobe3D: React.FC<SeismicGlobe3DProps> = ({
         </div>
         <div style="font-size: 12px; font-weight: 600; margin-bottom: 4px; color: #e2e8f0;">${ev.place}</div>
         <div style="font-size: 11px; color: #94a3b8; display: grid; grid-template-columns: 1fr 1fr; gap: 4px;">
-          <div>Profundidad: <b style="color: #cbd5e1;">${Number(ev.depth_km).toFixed(1)} km</b></div>
+          <div>Profundidad: <b style="color: #cbd5e1;">${ev.depth_km !== undefined && ev.depth_km !== null && !isNaN(Number(ev.depth_km)) ? `${Number(ev.depth_km).toFixed(1)} km` : '--'}</b></div>
           <div>Radio PGA: <b style="color: #38bdf8;">${Number(ev.impact_radius_km || 0).toFixed(0)} km</b></div>
         </div>
         ${

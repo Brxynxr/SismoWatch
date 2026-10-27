@@ -61,7 +61,7 @@ export const App: React.FC = () => {
     try {
       const [kpisData, eventsData, hourlyData, regionsData, magsData] = await Promise.all([
         api.getKPIs('24h').catch(() => null),
-        api.getEvents({ page_size: 40, time_range: '24h' }).catch(() => ({ items: [] })),
+        api.getEvents({ page_size: 200, time_range: '24h' }).catch(() => ({ items: [] })),
         api.getHourlyStats('24h').catch(() => []),
         api.getRegionStats('24h').catch(() => []),
         api.getMagnitudeDistribution('24h').catch(() => [])
@@ -111,7 +111,7 @@ export const App: React.FC = () => {
             prev.forEach((ev) => {
               if (!newMap.has(ev.event_id)) newMap.set(ev.event_id, ev);
             });
-            return Array.from(newMap.values()).slice(0, 35);
+            return Array.from(newMap.values()).slice(0, 200);
           });
         }
       } catch (err) {
