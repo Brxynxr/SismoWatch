@@ -93,7 +93,7 @@ def log_ai_run(
     except Exception as e:
         logger.error("Failed to log AI run: %s", e)
 
-def query_llm(prompt: str, system_prompt: str, provider: str = "local") -> str:
+def query_llm(prompt: str, system_prompt: str, provider: str = "local", max_tokens: int = 1000) -> str:
     """
     Queries LLM via Ollama (Local) or Groq (Cloud Fallback).
     """
@@ -111,7 +111,7 @@ def query_llm(prompt: str, system_prompt: str, provider: str = "local") -> str:
                     {"role": "user", "content": prompt}
                 ],
                 "temperature": 0.1,
-                "max_tokens": 1000
+                "max_tokens": max_tokens
             }
             res = requests.post(
                 "https://api.groq.com/openai/v1/chat/completions",
@@ -137,7 +137,8 @@ def query_llm(prompt: str, system_prompt: str, provider: str = "local") -> str:
         ],
         "stream": False,
         "options": {
-            "temperature": 0.1
+            "temperature": 0.1,
+            "num_predict": max_tokens
         }
     }
     res = requests.post(url, json=payload, timeout=25)
@@ -146,8 +147,8 @@ def query_llm(prompt: str, system_prompt: str, provider: str = "local") -> str:
     data = res.json()
     return data.get("message", {}).get("content", "")
 
-def generate_sql_for_question(user_question: str, provider: str = "local") -> str:
-    """Uses LLM to translate natural language question to read-only SQL."""
+def generate_sql_for_question(user_question: str, history: Optional[List[Dict[str, str]]] = None, provider: str = "local") -> str:
+    """Uses LLM to translate natural language question to read-only SQL, taking conversation history into account."""
     system_prompt = f"""Eres un Ingeniero de Datos experto en PostgreSQL para SismoWatch.
 Tu tarea es traducir la pregunta del usuario a UNA sentencia SQL de solo lectura sobre la vista curated.v_events_chat.
 
@@ -158,29 +159,58 @@ REGLAS ESTRICTAS:
 2. Consulta ÚNICAMENTE la vista 'curated.v_events_chat'.
 3. Para conteos usa COUNT(*). Para eventos recientes o mayor magnitud usa ORDER BY.
 4. Si la pregunta es sobre sismos, eventos, magnitudes o la base de datos, genera SIEMPRE la consulta SQL.
-5. ÚNICAMENTE si la pregunta es explícitamente sobre temas ajenos (como fútbol, cocina, celebridades como Messi, chistes o política), responde: RECHAZO_FUERA_DE_DOMINIO
+5. Si hay historial previo de la conversación y la pregunta es de seguimiento (ej: '¿a qué profundidad fue?', '¿hubo tsunami en ese sismo?'), usa el contexto del historial para identificar a qué sismo o región se refiere la consulta.
+6. ÚNICAMENTE si la pregunta es explícitamente sobre temas ajenos (como fútbol, cocina, celebridades como Messi, chistes o política), responde: RECHAZO_FUERA_DE_DOMINIO
 """
-    raw_response = query_llm(user_question, system_prompt, provider=provider)
+    history_context = ""
+    if history:
+        recent_lines = []
+        for h in history[-4:]:
+            role_name = "Usuario" if h.get("role") == "user" else "Asistente"
+            recent_lines.append(f"{role_name}: {h.get('content', '')}")
+        if recent_lines:
+            history_context = "Historial reciente de la conversación:\n" + "\n".join(recent_lines) + "\n\n"
+
+    full_prompt = f"{history_context}Pregunta actual: {user_question}"
+    raw_response = query_llm(full_prompt, system_prompt, provider=provider, max_tokens=140)
     # Strip markdown code fences if model included them
     cleaned = re.sub(r"```(sql)?", "", raw_response).strip()
     return cleaned
 
-def generate_grounded_answer(user_question: str, sql_query: str, sql_results: List[Dict[str, Any]], provider: str = "local") -> str:
-    """Uses LLM to summarize SQL results in Spanish with strict numerical grounding."""
+def generate_grounded_answer(
+    user_question: str,
+    sql_query: str,
+    sql_results: List[Dict[str, Any]],
+    history: Optional[List[Dict[str, str]]] = None,
+    provider: str = "local"
+) -> str:
+    """Uses LLM to summarize SQL results in Spanish with strict numerical grounding and professional visual layout."""
     # Serialize results to readable JSON
     results_str = json.dumps(sql_results[:15], default=str, indent=2, ensure_ascii=False)
 
     system_prompt = """Eres el Asistente Experto de SismoWatch para monitoreo sísmico en tiempo real.
-Tu misión es responder a la pregunta del usuario de manera natural, fluida, conversacional y profesional en español, explicando los resultados obtenidos de la base de datos.
+Tu misión es responder a la pregunta del usuario de manera natural, fluida, conversacional y profesional en español, explicando con claridad los resultados obtenidos de la base de datos.
 
-PAUTAS DE REDACCIÓN NATURAL Y RIGOR CIENTÍFICO (CERO ALUCINACIONES):
-1. Redacta de forma explicativa, fluida y humana en español (por ejemplo: "En las últimas 24 horas se registraron X eventos sísmicos en la red de monitoreo. El evento más significativo tuvo una magnitud de [M] localizado en [Región] a una profundidad de [h] km...").
+PAUTAS DE REDACCIÓN Y RIGOR CIENTÍFICO (CERO ALUCINACIONES):
+1. Redacta de forma explicativa, fluida y humana en español.
 2. Basa tu respuesta EXCLUSIVAMENTE en los datos de la consulta SQL provista. NUNCA inventes números, magnitudes, regiones ni fechas. Todas las cifras deben coincidir exactamente con los datos devueltos.
-3. Si la consulta devolvió 0 resultados, explica con amabilidad y naturalidad que tras consultar el catálogo no se registran eventos que coincidan con esos criterios.
-4. Si hay eventos con alerta de tsunami (tsunami = 1) o alerta de color (yellow, orange, red), resáltalos claramente como advertencia de protección civil.
-5. No expongas sintaxis técnica de SQL ni JSON crudo; entrega un reporte ejecutivo claro para el analista de riesgos.
+3. Si la consulta devuelve una lista de múltiples eventos (2 o más sismos), organiza los eventos en una tabla Markdown con las columnas:
+   | Magnitud | Región | Lugar | Fecha (UTC) | Profundidad | Tsunami |
+4. Si algún evento tiene alerta de tsunami activa (tsunami_alert = true o tsunami = 1), resáltalo claramente con un bloque de advertencia:
+   > 🌊 **ALERTA DE TSUNAMI**: Se activó advertencia para este evento en [Lugar].
+5. Si la consulta devolvió 0 resultados, explica con amabilidad y naturalidad que tras consultar el catálogo curado no se registran eventos con esos criterios.
+6. No expongas sintaxis técnica de SQL ni bloques de código JSON crudo; entrega un reporte ejecutivo claro para el analista de riesgos.
 """
-    user_prompt = f"""Pregunta del usuario: {user_question}
+    history_context = ""
+    if history:
+        recent_lines = []
+        for h in history[-3:]:
+            role_name = "Usuario" if h.get("role") == "user" else "Asistente"
+            recent_lines.append(f"{role_name}: {h.get('content', '')}")
+        if recent_lines:
+            history_context = "Contexto previo:\n" + "\n".join(recent_lines) + "\n\n"
+
+    user_prompt = f"""{history_context}Pregunta del usuario: {user_question}
 
 Consulta SQL ejecutada:
 {sql_query}
@@ -190,4 +220,4 @@ Resultados obtenidos de la base de datos (Gold):
 
 Responde a la pregunta en español de forma natural y rigurosamente grounded en estos resultados:"""
 
-    return query_llm(user_prompt, system_prompt, provider=provider)
+    return query_llm(user_prompt, system_prompt, provider=provider, max_tokens=1000)

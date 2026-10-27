@@ -140,11 +140,15 @@ export const api = {
     return res.json();
   },
 
-  askChat: async (message: string, provider: 'local' | 'cloud' = 'local') => {
+  askChat: async (
+    message: string,
+    provider: 'local' | 'cloud' = 'cloud',
+    history?: Array<{ role: string; content: string }>
+  ) => {
     const res = await fetch(`${API_BASE}/api/chat`, {
       method: 'POST',
       headers: authHeaders(),
-      body: JSON.stringify({ message, provider })
+      body: JSON.stringify({ message, provider, history: history || [] })
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({ detail: 'Error en el asistente' }));

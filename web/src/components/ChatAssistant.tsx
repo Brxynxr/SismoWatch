@@ -52,51 +52,149 @@ export const ChatAssistant: React.FC = () => {
     if (!text) return null;
 
     const lines = text.split('\n');
+    const elements: React.ReactNode[] = [];
+    let i = 0;
 
-    return (
-      <div className="space-y-1.5 leading-relaxed text-xs sm:text-[13px]">
-        {lines.map((line, idx) => {
-          const trimmed = line.trim();
-          if (!trimmed) {
-            return <div key={idx} className="h-1" />;
-          }
-
-          const isBullet = /^[*-]\s+/.test(trimmed);
-          const lineContent = isBullet ? trimmed.replace(/^[*-]\s+/, '') : trimmed;
-
-          const parts = lineContent.split(/(\*\*[^*]+\*\*)/g);
-
-          const renderedLine = parts.map((part, partIdx) => {
-            if (part.startsWith('**') && part.endsWith('**')) {
-              const boldText = part.slice(2, -2);
-              return (
-                <strong key={partIdx} className="font-bold text-sky-300">
-                  {boldText}
-                </strong>
-              );
-            }
-            return part;
-          });
-
-          if (isBullet) {
-            return (
-              <div key={idx} className="flex items-start gap-2 pl-1 py-0.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 shrink-0 mt-1.5 shadow-sm shadow-cyan-400/50" />
-                <div className="flex-1 text-slate-200">
-                  {renderedLine}
-                </div>
-              </div>
-            );
-          }
-
+    const formatInline = (str: string) => {
+      const parts = str.split(/(\*\*[^*]+\*\*|`[^`]+`)/g);
+      return parts.map((part, pIdx) => {
+        if (part.startsWith('**') && part.endsWith('**')) {
           return (
-            <p key={idx} className="text-slate-200">
-              {renderedLine}
-            </p>
+            <strong key={pIdx} className="font-bold text-sky-300">
+              {part.slice(2, -2)}
+            </strong>
           );
-        })}
-      </div>
-    );
+        }
+        if (part.startsWith('`') && part.endsWith('`')) {
+          return (
+            <code key={pIdx} className="px-1 py-0.5 rounded bg-slate-800 font-mono text-[11px] text-cyan-300">
+              {part.slice(1, -1)}
+            </code>
+          );
+        }
+        return part;
+      });
+    };
+
+    while (i < lines.length) {
+      const line = lines[i];
+      const trimmed = line.trim();
+
+      if (!trimmed) {
+        elements.push(<div key={`spacer-${i}`} className="h-1" />);
+        i++;
+        continue;
+      }
+
+      // 1. Table Detection (starts and ends with |)
+      if (trimmed.startsWith('|') && trimmed.endsWith('|')) {
+        const tableLines: string[] = [];
+        while (i < lines.length && lines[i].trim().startsWith('|') && lines[i].trim().endsWith('|')) {
+          tableLines.push(lines[i].trim());
+          i++;
+        }
+
+        if (tableLines.length >= 2) {
+          const headerCells = tableLines[0]
+            .split('|')
+            .slice(1, -1)
+            .map((c) => c.trim());
+          const dataRows = tableLines.slice(1).filter((l) => !/^\|[\s\-:|]+\|$/.test(l));
+
+          elements.push(
+            <div key={`table-${i}`} className="my-2.5 overflow-x-auto rounded-lg border border-slate-700/80 bg-slate-950/80 shadow-md">
+              <table className="w-full text-left text-[11px] font-mono border-collapse min-w-[320px]">
+                <thead className="bg-slate-900 text-sky-300 border-b border-slate-700">
+                  <tr>
+                    {headerCells.map((h, hIdx) => (
+                      <th key={hIdx} className="px-2.5 py-1.5 font-bold uppercase tracking-wider text-[10px]">
+                        {h}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-800/80 text-slate-300">
+                  {dataRows.map((rowStr, rIdx) => {
+                    const cells = rowStr
+                      .split('|')
+                      .slice(1, -1)
+                      .map((c) => c.trim());
+                    return (
+                      <tr key={rIdx} className="hover:bg-slate-900/50 transition-colors">
+                        {cells.map((cell, cIdx) => (
+                          <td key={cIdx} className="px-2.5 py-1.5">
+                            {formatInline(cell)}
+                          </td>
+                        ))}
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          );
+          continue;
+        }
+      }
+
+      // 2. Blockquote / Alert Banner (> ...)
+      if (trimmed.startsWith('>')) {
+        const quoteContent = trimmed.replace(/^>\s*/, '');
+        const isTsunamiAlert = quoteContent.toLowerCase().includes('tsunami') || quoteContent.includes('🚨') || quoteContent.includes('🌊');
+        elements.push(
+          <div
+            key={`quote-${i}`}
+            className={`my-2 p-2.5 rounded-lg border-l-2 text-xs flex items-start gap-2 ${
+              isTsunamiAlert
+                ? 'bg-rose-500/10 border-rose-500 text-rose-200'
+                : 'bg-cyan-500/10 border-cyan-500 text-cyan-200'
+            }`}
+          >
+            <div className="flex-1 leading-relaxed">{formatInline(quoteContent)}</div>
+          </div>
+        );
+        i++;
+        continue;
+      }
+
+      // 3. Numbered List (1. ...)
+      const numMatch = trimmed.match(/^(\d+)\.\s+(.*)$/);
+      if (numMatch) {
+        elements.push(
+          <div key={`num-${i}`} className="flex items-start gap-2 pl-1 py-0.5">
+            <span className="px-1.5 py-0.2 rounded-md bg-sky-500/20 text-sky-300 font-mono text-[10px] font-bold shrink-0 mt-0.5">
+              {numMatch[1]}
+            </span>
+            <div className="flex-1 text-slate-200 leading-relaxed">{formatInline(numMatch[2])}</div>
+          </div>
+        );
+        i++;
+        continue;
+      }
+
+      // 4. Bullet List (- ... or * ...)
+      if (/^[*-]\s+/.test(trimmed)) {
+        const bulletContent = trimmed.replace(/^[*-]\s+/, '');
+        elements.push(
+          <div key={`bullet-${i}`} className="flex items-start gap-2 pl-1 py-0.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 shrink-0 mt-1.5 shadow-sm shadow-cyan-400/50" />
+            <div className="flex-1 text-slate-200 leading-relaxed">{formatInline(bulletContent)}</div>
+          </div>
+        );
+        i++;
+        continue;
+      }
+
+      // 5. Standard paragraph
+      elements.push(
+        <p key={`p-${i}`} className="text-slate-200 leading-relaxed">
+          {formatInline(trimmed)}
+        </p>
+      );
+      i++;
+    }
+
+    return <div className="space-y-1.5 text-xs sm:text-[13px]">{elements}</div>;
   };
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -131,7 +229,15 @@ export const ChatAssistant: React.FC = () => {
     setLoading(true);
 
     try {
-      const data = await api.askChat(textToSend, provider);
+      const historyPayload = messages
+        .filter((m) => m.id !== 'welcome' && !m.error)
+        .slice(-4)
+        .map((m) => ({
+          role: m.sender === 'user' ? 'user' : 'assistant',
+          content: m.text,
+        }));
+
+      const data = await api.askChat(textToSend, provider, historyPayload);
       const assistantMsg: ChatMessage = {
         id: (Date.now() + 1).toString(),
         sender: 'assistant',

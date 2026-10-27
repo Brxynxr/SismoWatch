@@ -16,9 +16,14 @@ from services.ai_service import (
 logger = logging.getLogger("sismowatch.api.chat")
 router = APIRouter(prefix="/api/chat", tags=["Agente Conversacional"])
 
+class ChatMessageItem(BaseModel):
+    role: str
+    content: str
+
 class ChatRequest(BaseModel):
     message: str
     provider: Optional[str] = "cloud"  # "cloud" (Groq predeterminado) o "local" (Ollama)
+    history: Optional[List[ChatMessageItem]] = None
 
 class ProofOfGrounding(BaseModel):
     verified: bool
@@ -53,8 +58,10 @@ def ask_chat_agent(
     model_name = settings.OLLAMA_MODEL if req.provider == "local" else (settings.GROQ_MODEL if settings.GROQ_API_KEY else settings.OLLAMA_MODEL)
 
     try:
+        history_dicts = [h.model_dump() for h in req.history] if req.history else None
+
         # Step 1: Text-to-SQL
-        sql = generate_sql_for_question(req.message, provider=req.provider)
+        sql = generate_sql_for_question(req.message, history=history_dicts, provider=req.provider)
 
         # Off-topic domain protection guardrail
         if sql.strip() == "RECHAZO_FUERA_DE_DOMINIO":
@@ -114,7 +121,7 @@ def ask_chat_agent(
                 sql_results, db_latency = execute_chat_sql(sql)
 
         # Step 4: Grounded Answer Synthesis
-        reply = generate_grounded_answer(req.message, sql, sql_results, provider=req.provider)
+        reply = generate_grounded_answer(req.message, sql, sql_results, history=history_dicts, provider=req.provider)
 
         total_latency = time.time() - start_time
 
