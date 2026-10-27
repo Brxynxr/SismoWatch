@@ -67,18 +67,44 @@ export const SeismicGlobe3D: React.FC<SeismicGlobe3DProps> = ({
   }, [selectedEvent]);
 
   const getMarkerColor = (mag: number): string => {
-    if (mag >= 5.0) return '#f43f5e'; // Rose
-    if (mag >= 4.0) return '#fbbf24'; // Amber
-    if (mag >= 2.5) return '#34d399'; // Emerald
-    return '#38bdf8'; // Sky
+    if (mag >= 5.0) return '#ff0055'; // Neon Hyper Red
+    if (mag >= 4.0) return '#ff9900'; // Neon Electric Amber
+    if (mag >= 2.5) return '#00ff66'; // Neon Matrix Green
+    return '#00d4ff'; // Neon Laser Cyan
   };
 
   const getRingColor = (mag: number): string => {
-    if (mag >= 5.0) return 'rgba(244, 63, 94, 0.7)';
-    if (mag >= 4.0) return 'rgba(251, 191, 36, 0.6)';
-    if (mag >= 2.5) return 'rgba(52, 211, 153, 0.5)';
-    return 'rgba(56, 189, 248, 0.4)';
+    if (mag >= 5.0) return 'rgba(255, 0, 85, 0.7)';
+    if (mag >= 4.0) return 'rgba(255, 153, 0, 0.6)';
+    if (mag >= 2.5) return 'rgba(0, 255, 102, 0.5)';
+    return 'rgba(0, 212, 255, 0.4)';
   };
+
+  const ringsData = React.useMemo(() => {
+    const list: any[] = events.map((ev) => ({
+      lat: ev.latitude,
+      lng: ev.longitude,
+      color: getRingColor(ev.magnitude),
+      maxR: Math.max(2.0, Math.min(10, (ev.impact_radius_km || 10) / 18)),
+      propagationSpeed: Math.max(1.0, ev.magnitude * 0.4),
+      repeatPeriod: 1200,
+      isTargetPulse: false,
+    }));
+
+    if (selectedEvent) {
+      list.push({
+        lat: selectedEvent.latitude,
+        lng: selectedEvent.longitude,
+        color: 'rgba(0, 245, 255, 0.95)',
+        maxR: 15,
+        propagationSpeed: 4.5,
+        repeatPeriod: 600,
+        isTargetPulse: true,
+      });
+    }
+
+    return list;
+  }, [events, selectedEvent]);
 
   const resetView = () => {
     if (globeRef.current) {
@@ -130,23 +156,42 @@ export const SeismicGlobe3D: React.FC<SeismicGlobe3DProps> = ({
         showAtmosphere={true}
         atmosphereColor="#38bdf8"
         atmosphereAltitude={0.16}
-        // Points Layer: Earthquake Epicenters
+        // Option 2: Sci-Fi Laser Beacons Layer
         pointsData={events}
         pointLat={(d: any) => d.latitude}
         pointLng={(d: any) => d.longitude}
-        pointAltitude={(d: any) => Math.max(0.015, (d.magnitude / 10) * 0.12)}
-        pointRadius={(d: any) => Math.max(0.35, d.magnitude * 0.25)}
-        pointColor={(d: any) => getMarkerColor(d.magnitude)}
+        pointAltitude={(d: any) =>
+          d.event_id === selectedEvent?.event_id
+            ? 0.42
+            : Math.max(0.06, (d.magnitude / 10) * 0.35)
+        }
+        pointRadius={(d: any) =>
+          d.event_id === selectedEvent?.event_id ? 0.22 : 0.075
+        }
+        pointColor={(d: any) =>
+          d.event_id === selectedEvent?.event_id
+            ? '#00f5ff'
+            : getMarkerColor(d.magnitude)
+        }
         pointLabel={(d: any) => renderTooltip(d)}
         onPointClick={handlePointClick}
-        // Concentric Rings Layer: Physical PGA Impact Wave
-        ringsData={events}
-        ringLat={(d: any) => d.latitude}
-        ringLng={(d: any) => d.longitude}
-        ringColor={(d: any) => () => getRingColor(d.magnitude)}
-        ringMaxRadius={(d: any) => Math.max(1.8, Math.min(10, (d.impact_radius_km || 10) / 18))}
-        ringPropagationSpeed={(d: any) => Math.max(1.0, d.magnitude * 0.4)}
-        ringRepeatPeriod={1000}
+        // Concentric Rings Layer: Physical PGA Impact Wave + Target Tactical Pulse
+        ringsData={ringsData}
+        ringLat={(d: any) => d.lat}
+        ringLng={(d: any) => d.lng}
+        ringColor={(d: any) => () => d.color}
+        ringMaxRadius={(d: any) => d.maxR}
+        ringPropagationSpeed={(d: any) => d.propagationSpeed}
+        ringRepeatPeriod={(d: any) => d.repeatPeriod}
+        // 3D Tactical Target HUD Label on selected beacon
+        labelsData={selectedEvent ? [selectedEvent] : []}
+        labelLat={(d: any) => d.latitude}
+        labelLng={(d: any) => d.longitude}
+        labelText={(d: any) => `🎯 M${Number(d.magnitude).toFixed(1)} • ${d.place}`}
+        labelSize={1.3}
+        labelColor={() => '#00f5ff'}
+        labelDotRadius={0.3}
+        labelAltitude={0.44}
       />
 
       {/* Cockpit Overlay: Top Controls */}
@@ -177,29 +222,30 @@ export const SeismicGlobe3D: React.FC<SeismicGlobe3DProps> = ({
       {/* Cockpit Overlay: Magnitudes & PGA Legend */}
       <div className="absolute bottom-4 left-4 z-20 bg-slate-900/90 backdrop-blur border border-slate-800 rounded-xl p-3 text-xs shadow-2xl space-y-2 pointer-events-auto">
         <div className="flex items-center gap-1.5 font-semibold text-slate-200 border-b border-slate-800 pb-1.5">
-          <Waves className="w-4 h-4 text-sky-400" />
-          <span>Telemetría Sísmica 3D (PGA)</span>
+          <Waves className="w-4 h-4 text-cyan-400" />
+          <span>Balizas Láser & Telemetría PGA</span>
         </div>
         <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-[11px]">
           <div className="flex items-center gap-2">
-            <span className="w-2.5 h-2.5 rounded-full bg-rose-500 shadow-sm shadow-rose-500/50"></span>
-            <span className="text-slate-300">M ≥ 5.0 (Fuerte)</span>
+            <span className="w-2.5 h-2.5 rounded-full bg-[#ff0055] shadow-sm shadow-[#ff0055]/50"></span>
+            <span className="text-slate-300">M ≥ 5.0 (Crítico)</span>
           </div>
           <div className="flex items-center gap-2">
-            <span className="w-2.5 h-2.5 rounded-full bg-amber-400 shadow-sm shadow-amber-400/50"></span>
+            <span className="w-2.5 h-2.5 rounded-full bg-[#ff9900] shadow-sm shadow-[#ff9900]/50"></span>
             <span className="text-slate-300">M 4.0 - 4.9</span>
           </div>
           <div className="flex items-center gap-2">
-            <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 shadow-sm shadow-emerald-400/50"></span>
+            <span className="w-2.5 h-2.5 rounded-full bg-[#00ff66] shadow-sm shadow-[#00ff66]/50"></span>
             <span className="text-slate-300">M 2.5 - 3.9</span>
           </div>
           <div className="flex items-center gap-2">
-            <span className="w-2.5 h-2.5 rounded-full bg-sky-400 shadow-sm shadow-sky-400/50"></span>
+            <span className="w-2.5 h-2.5 rounded-full bg-[#00d4ff] shadow-sm shadow-[#00d4ff]/50"></span>
             <span className="text-slate-300">M &lt; 2.5</span>
           </div>
         </div>
-        <div className="text-[10px] text-sky-400 font-mono border-t border-slate-800 pt-1">
-          ◎ Ondas expansivas = Radio PGA (R_impact en km)
+        <div className="text-[10px] text-cyan-400 font-mono border-t border-slate-800 pt-1 flex items-center justify-between">
+          <span>◎ Balizas verticales = Altura ∝ Magnitud</span>
+          <span className="text-slate-400">🎯 Clic enfoca</span>
         </div>
       </div>
     </div>

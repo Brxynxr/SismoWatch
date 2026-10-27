@@ -55,7 +55,7 @@ export const CockpitDashboard: React.FC<CockpitDashboardProps> = ({
   };
 
   return (
-    <div className="relative w-full h-[calc(100vh-8.5rem)] min-h-[600px] flex rounded-2xl overflow-hidden border border-slate-800 bg-slate-950 shadow-2xl">
+    <div className="relative w-full h-full min-h-[600px] flex overflow-hidden bg-slate-950">
       {/* 3D WebGL Globe Viewport (Dominant Center/Left) */}
       <div className="relative flex-1 h-full overflow-hidden">
         <SeismicGlobe3D

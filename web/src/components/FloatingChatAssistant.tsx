@@ -123,22 +123,19 @@ export const FloatingChatAssistant: React.FC = () => {
 
   return (
     <div className="fixed bottom-5 right-5 z-50">
-      {/* Floating Action Button (Collapsed) */}
+      {/* Minimalist Floating Robot Button (Collapsed) */}
       {!isOpen && (
         <button
           onClick={() => setIsOpen(true)}
-          className="group relative flex items-center gap-2.5 px-4 py-3 rounded-full bg-gradient-to-r from-sky-600 to-indigo-600 text-white font-medium text-xs shadow-2xl hover:scale-105 hover:shadow-sky-500/25 transition-all border border-sky-400/30"
-          title="Abrir Asistente Conversacional Grounded"
+          className="group relative flex items-center justify-center w-13 h-13 sm:w-14 sm:h-14 rounded-full bg-gradient-to-tr from-sky-600 via-indigo-600 to-cyan-500 text-white shadow-2xl hover:scale-110 hover:shadow-cyan-500/30 transition-all border border-cyan-400/40 focus:outline-none cursor-pointer"
+          title="Asistente IA Grounded"
+          aria-label="Abrir Asistente IA"
         >
-          <span className="relative flex h-3 w-3">
+          <span className="relative flex h-3 w-3 absolute -top-0.5 -right-0.5">
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-            <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
+            <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500 border-2 border-slate-900"></span>
           </span>
-          <Bot className="w-4 h-4 text-white" />
-          <span className="font-semibold tracking-wide">Asistente IA Grounded</span>
-          <span className="text-[10px] uppercase font-mono px-1.5 py-0.5 rounded bg-black/30 border border-white/20">
-            {provider === 'cloud' ? 'Groq' : 'Ollama'}
-          </span>
+          <Bot className="w-6 h-6 text-white group-hover:rotate-6 transition-transform" />
         </button>
       )}
 
