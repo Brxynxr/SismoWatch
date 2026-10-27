@@ -49,8 +49,8 @@ export const api = {
     return user;
   },
 
-  getKPIs: async (): Promise<KPIs> => {
-    const res = await fetch(`${API_BASE}/api/kpis`, { headers: authHeaders() });
+  getKPIs: async (range: string = '24h'): Promise<KPIs> => {
+    const res = await fetch(`${API_BASE}/api/kpis?range=${range}`, { headers: authHeaders() });
     if (!res.ok) throw new Error('Error al cargar KPIs');
     return res.json();
   },
@@ -60,6 +60,9 @@ export const api = {
     max_magnitude?: number;
     region?: string;
     magnitude_class?: string;
+    start_date?: string;
+    end_date?: string;
+    time_range?: string;
     page?: number;
     page_size?: number;
   }): Promise<{ items: EarthquakeEvent[]; total: number; page: number; total_pages: number }> => {
@@ -68,6 +71,9 @@ export const api = {
     if (params.max_magnitude !== undefined) query.append('max_magnitude', params.max_magnitude.toString());
     if (params.region) query.append('region', params.region);
     if (params.magnitude_class) query.append('magnitude_class', params.magnitude_class);
+    if (params.start_date) query.append('start_date', params.start_date);
+    if (params.end_date) query.append('end_date', params.end_date);
+    if (params.time_range) query.append('time_range', params.time_range);
     if (params.page) query.append('page', params.page.toString());
     if (params.page_size) query.append('page_size', params.page_size.toString());
 
@@ -76,20 +82,20 @@ export const api = {
     return res.json();
   },
 
-  getHourlyStats: async (): Promise<HourlyStat[]> => {
-    const res = await fetch(`${API_BASE}/api/stats/hourly`, { headers: authHeaders() });
+  getHourlyStats: async (range: string = '24h'): Promise<HourlyStat[]> => {
+    const res = await fetch(`${API_BASE}/api/stats/hourly?range=${range}`, { headers: authHeaders() });
     if (!res.ok) throw new Error('Error al cargar estadísticas horarias');
     return res.json();
   },
 
-  getRegionStats: async (): Promise<RegionStat[]> => {
-    const res = await fetch(`${API_BASE}/api/stats/regions`, { headers: authHeaders() });
+  getRegionStats: async (range: string = '24h'): Promise<RegionStat[]> => {
+    const res = await fetch(`${API_BASE}/api/stats/regions?range=${range}`, { headers: authHeaders() });
     if (!res.ok) throw new Error('Error al cargar estadísticas regionales');
     return res.json();
   },
 
-  getMagnitudeDistribution: async (): Promise<MagnitudeStat[]> => {
-    const res = await fetch(`${API_BASE}/api/stats/magnitudes`, { headers: authHeaders() });
+  getMagnitudeDistribution: async (range: string = '24h'): Promise<MagnitudeStat[]> => {
+    const res = await fetch(`${API_BASE}/api/stats/magnitudes?range=${range}`, { headers: authHeaders() });
     if (!res.ok) throw new Error('Error al cargar distribución de magnitudes');
     return res.json();
   },

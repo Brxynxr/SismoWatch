@@ -24,6 +24,8 @@ interface CockpitDashboardProps {
   hourlyStats: HourlyStat[];
   regionStats: RegionStat[];
   magnitudeStats: MagnitudeStat[];
+  timeRange?: string;
+  onTimeRangeChange?: (range: string) => void;
 }
 
 export const CockpitDashboard: React.FC<CockpitDashboardProps> = ({
@@ -32,10 +34,11 @@ export const CockpitDashboard: React.FC<CockpitDashboardProps> = ({
   hourlyStats,
   regionStats,
   magnitudeStats,
+  timeRange = '24h',
+  onTimeRangeChange,
 }) => {
   const [selectedEvent, setSelectedEvent] = useState<EarthquakeEvent | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(true);
-  const [sidebarTab, setSidebarTab] = useState<'events' | 'charts' | 'kpis'>('events');
 
   const getMarkerColor = (mag: number): string => {
     if (mag >= 5.0) return 'text-rose-400 bg-rose-500/10 border-rose-500/30';
@@ -98,133 +101,98 @@ export const CockpitDashboard: React.FC<CockpitDashboardProps> = ({
                 </span>
               </div>
 
-              {/* Sidebar Internal Tabs */}
-              <div className="grid grid-cols-3 gap-1 bg-slate-900/90 p-1 rounded-lg border border-slate-800/80 text-xs">
-                <button
-                  onClick={() => setSidebarTab('events')}
-                  className={`flex items-center justify-center gap-1.5 py-1.5 rounded-md font-medium transition-colors ${
-                    sidebarTab === 'events'
-                      ? 'bg-slate-800 text-sky-300 shadow-sm border border-slate-700/60'
-                      : 'text-slate-400 hover:text-white'
-                  }`}
-                >
-                  <Radio className="w-3.5 h-3.5" />
-                  Feed
-                </button>
-                <button
-                  onClick={() => setSidebarTab('charts')}
-                  className={`flex items-center justify-center gap-1.5 py-1.5 rounded-md font-medium transition-colors ${
-                    sidebarTab === 'charts'
-                      ? 'bg-slate-800 text-sky-300 shadow-sm border border-slate-700/60'
-                      : 'text-slate-400 hover:text-white'
-                  }`}
-                >
-                  <BarChart3 className="w-3.5 h-3.5" />
-                  Analítica
-                </button>
-                <button
-                  onClick={() => setSidebarTab('kpis')}
-                  className={`flex items-center justify-center gap-1.5 py-1.5 rounded-md font-medium transition-colors ${
-                    sidebarTab === 'kpis'
-                      ? 'bg-slate-800 text-sky-300 shadow-sm border border-slate-700/60'
-                      : 'text-slate-400 hover:text-white'
-                  }`}
-                >
-                  <ShieldCheck className="w-3.5 h-3.5" />
-                  KPIs
-                </button>
+              {/* Feed Time Range Filter */}
+              <div className="grid grid-cols-4 gap-1 bg-slate-900/90 p-1 rounded-lg border border-slate-800/80 text-[11px]">
+                {[
+                  { id: '24h', label: '24h' },
+                  { id: '7d', label: 'Semana' },
+                  { id: '30d', label: 'Mes' },
+                  { id: '1y', label: 'Año' }
+                ].map((item) => (
+                  <button
+                    key={item.id}
+                    onClick={() => onTimeRangeChange && onTimeRangeChange(item.id)}
+                    className={`py-1.5 rounded-md font-medium text-center transition-all cursor-pointer ${
+                      timeRange === item.id
+                        ? 'bg-sky-500/20 text-sky-300 border border-sky-500/40 font-semibold shadow-sm'
+                        : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+                    }`}
+                  >
+                    {item.label}
+                  </button>
+                ))}
               </div>
             </div>
 
-            {/* Sidebar Tab Contents (Independent Vertical Scroll) */}
+            {/* Sidebar Feed Content (Pure Seismic Event Stream) */}
             <div className="flex-1 overflow-y-auto p-3.5 space-y-3 custom-scrollbar">
-              {/* TAB 1: SISMOS RECIENTES */}
-              {sidebarTab === 'events' && (
-                <div className="space-y-2.5">
-                  <div className="flex items-center justify-between text-[11px] text-slate-400 px-1">
-                    <span>Haz clic en un evento para enfocar la cámara 3D</span>
+              <div className="space-y-2.5">
+                <div className="flex items-center justify-between text-[11px] text-slate-400 px-1">
+                  <span>Haz clic en un evento para enfocar la cámara 3D</span>
+                  <span className="text-[10px] text-slate-500 font-mono">Filtro: {timeRange}</span>
+                </div>
+
+                {events.length === 0 ? (
+                  <div className="text-center py-12 text-slate-500 text-xs">
+                    No hay sismos reportados en el feed para este rango de tiempo
                   </div>
+                ) : (
+                  events.map((ev) => {
+                    const isSelected = selectedEvent?.event_id === ev.event_id;
+                    const badgeClasses = getMarkerColor(ev.magnitude);
 
-                  {events.length === 0 ? (
-                    <div className="text-center py-12 text-slate-500 text-xs">
-                      No hay sismos reportados en el feed actual
-                    </div>
-                  ) : (
-                    events.map((ev) => {
-                      const isSelected = selectedEvent?.event_id === ev.event_id;
-                      const badgeClasses = getMarkerColor(ev.magnitude);
-
-                      return (
-                        <div
-                          key={ev.event_id}
-                          onClick={() => setSelectedEvent(ev)}
-                          className={`p-3 rounded-xl border transition-all cursor-pointer ${
-                            isSelected
-                              ? 'bg-sky-500/10 border-sky-500/60 shadow-lg shadow-sky-500/5 ring-1 ring-sky-500/40'
-                              : 'bg-slate-900/60 hover:bg-slate-900 border-slate-800/80 hover:border-slate-700'
-                          }`}
-                        >
-                          <div className="flex items-start justify-between gap-2 mb-1.5">
-                            <span
-                              className={`text-xs font-black px-2 py-0.5 rounded-md border ${badgeClasses}`}
-                            >
-                              M {Number(ev.magnitude).toFixed(1)}
-                            </span>
-                            <span className="text-[10px] font-mono text-slate-500 flex items-center gap-1">
-                              <Clock className="w-3 h-3 text-slate-500" />
-                              {formatEventTime(ev.event_time)}
-                            </span>
-                          </div>
-
-                          <div className="text-xs font-semibold text-slate-200 line-clamp-1 mb-2">
-                            {ev.place}
-                          </div>
-
-                          <div className="grid grid-cols-2 gap-2 text-[11px] text-slate-400 pt-2 border-t border-slate-800/60">
-                            <div>
-                              Región: <span className="text-slate-300 font-medium">{ev.region || 'Global'}</span>
-                            </div>
-                            <div>
-                              Prof: <span className="text-slate-300 font-medium">{Number(ev.depth_km).toFixed(1)} km</span>
-                            </div>
-                            <div>
-                              Radio PGA: <span className="text-sky-400 font-mono font-medium">{Number(ev.impact_radius_km || 0).toFixed(0)} km</span>
-                            </div>
-                            <div>
-                              Estado: <span className="text-slate-300 capitalize">{ev.status}</span>
-                            </div>
-                          </div>
-
-                          {ev.tsunami_alert && (
-                            <div className="mt-2.5 flex items-center gap-1.5 text-[10px] font-bold text-rose-400 bg-rose-500/10 border border-rose-500/30 px-2 py-1 rounded">
-                              <AlertTriangle className="w-3 h-3" />
-                              ALERTA DE TSUNAMI EMITIDA
-                            </div>
-                          )}
+                    return (
+                      <div
+                        key={ev.event_id}
+                        onClick={() => setSelectedEvent(ev)}
+                        className={`p-3 rounded-xl border transition-all cursor-pointer ${
+                          isSelected
+                            ? 'bg-sky-500/10 border-sky-500/60 shadow-lg shadow-sky-500/5 ring-1 ring-sky-500/40'
+                            : 'bg-slate-900/60 hover:bg-slate-900 border-slate-800/80 hover:border-slate-700'
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-2 mb-1.5">
+                          <span
+                            className={`text-xs font-black px-2 py-0.5 rounded-md border ${badgeClasses}`}
+                          >
+                            M {Number(ev.magnitude).toFixed(1)}
+                          </span>
+                          <span className="text-[10px] font-mono text-slate-500 flex items-center gap-1">
+                            <Clock className="w-3 h-3 text-slate-500" />
+                            {formatEventTime(ev.event_time)}
+                          </span>
                         </div>
-                      );
-                    })
-                  )}
-                </div>
-              )}
 
-              {/* TAB 2: ANALÍTICA (CHARTS) */}
-              {sidebarTab === 'charts' && (
-                <div className="space-y-4">
-                  <ChartsView
-                    hourlyStats={hourlyStats}
-                    regionStats={regionStats}
-                    magnitudeStats={magnitudeStats}
-                  />
-                </div>
-              )}
+                        <div className="text-xs font-semibold text-slate-200 line-clamp-1 mb-2">
+                          {ev.place}
+                        </div>
 
-              {/* TAB 3: KPIS & CALIDAD */}
-              {sidebarTab === 'kpis' && (
-                <div className="space-y-4">
-                  <KPICards kpis={kpis} />
-                </div>
-              )}
+                        <div className="grid grid-cols-2 gap-2 text-[11px] text-slate-400 pt-2 border-t border-slate-800/60">
+                          <div>
+                            Región: <span className="text-slate-300 font-medium">{ev.region || 'Global'}</span>
+                          </div>
+                          <div>
+                            Prof: <span className="text-slate-300 font-medium">{Number(ev.depth_km).toFixed(1)} km</span>
+                          </div>
+                          <div>
+                            Radio PGA: <span className="text-sky-400 font-mono font-medium">{Number(ev.impact_radius_km || 0).toFixed(0)} km</span>
+                          </div>
+                          <div>
+                            Estado: <span className="text-slate-300 capitalize">{ev.status}</span>
+                          </div>
+                        </div>
+
+                        {ev.tsunami_alert && (
+                          <div className="mt-2.5 flex items-center gap-1.5 text-[10px] font-bold text-rose-400 bg-rose-500/10 border border-rose-500/30 px-2 py-1 rounded">
+                            <AlertTriangle className="w-3 h-3" />
+                            ALERTA DE TSUNAMI EMITIDA
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })
+                )}
+              </div>
             </div>
           </>
         )}

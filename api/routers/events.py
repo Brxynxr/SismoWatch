@@ -15,6 +15,7 @@ def list_events(
     magnitude_class: Optional[str] = Query(None, description="Micro, Minor, Light, Moderate, Strong, Major, Great"),
     start_date: Optional[datetime] = Query(None, description="Fecha de inicio (ISO 8601)"),
     end_date: Optional[datetime] = Query(None, description="Fecha de fin (ISO 8601)"),
+    time_range: Optional[str] = Query(None, pattern="^(24h|7d|30d|1y)$", description="Filtro rápido de tiempo (24h, 7d, 30d, 1y)"),
     page: int = Query(1, ge=1, description="Número de página"),
     page_size: int = Query(20, ge=1, le=100, description="Tamaño de página"),
     current_user: UserPayload = Depends(get_current_user)
@@ -49,6 +50,11 @@ def list_events(
     if end_date:
         conditions.append("event_time <= %s")
         params.append(end_date)
+
+    if time_range:
+        interval_map = {"24h": "24 hours", "7d": "7 days", "30d": "30 days", "1y": "365 days"}
+        interval_val = interval_map.get(time_range, "24 hours")
+        conditions.append(f"event_time >= NOW() - INTERVAL '{interval_val}'")
 
     where_clause = " AND ".join(conditions)
     offset = (page - 1) * page_size

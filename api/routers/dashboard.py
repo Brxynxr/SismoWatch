@@ -1,19 +1,46 @@
-from typing import Dict, Any, List
-from fastapi import APIRouter, Depends, HTTPException
+from typing import Dict, Any, List, Optional
+from fastapi import APIRouter, Depends, HTTPException, Query
 from psycopg2.extras import RealDictCursor
 from auth import get_current_user, UserPayload
 from db import get_api_reader_conn
 
 router = APIRouter(prefix="/api", tags=["Dashboard & KPIs"])
 
+INTERVAL_MAP = {
+    "24h": "24 hours",
+    "7d": "7 days",
+    "30d": "30 days",
+    "1y": "365 days"
+}
+
 @router.get("/kpis", response_model=Dict[str, Any])
-def get_kpis(current_user: UserPayload = Depends(get_current_user)):
-    """Returns 24h summary KPIs from curated.v_kpis_24h."""
+def get_kpis(
+    range: str = Query("24h", pattern="^(24h|7d|30d|1y)$", description="Rango de tiempo"),
+    current_user: UserPayload = Depends(get_current_user)
+):
+    """Returns summary KPIs for the requested time range."""
+    interval_val = INTERVAL_MAP.get(range, "24 hours")
     with get_api_reader_conn() as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            cur.execute("SELECT * FROM curated.v_kpis_24h LIMIT 1;")
+            if range == "24h":
+                cur.execute("SELECT * FROM curated.v_kpis_24h LIMIT 1;")
+                row = cur.fetchone()
+                if row:
+                    return dict(row)
+
+            cur.execute(f"""
+                SELECT 
+                    COUNT(*)::int AS total_events_24h,
+                    COALESCE(MAX(magnitude), 0.0)::float AS max_magnitude_24h,
+                    COALESCE(ROUND(AVG(magnitude), 2), 0.0)::float AS avg_magnitude_24h,
+                    COUNT(*) FILTER (WHERE tsunami_alert = true)::int AS tsunami_alerts_24h,
+                    MAX(event_time) AS latest_event_time,
+                    COUNT(*) FILTER (WHERE status = 'reviewed')::int AS reviewed_events_24h
+                FROM curated.earthquakes
+                WHERE event_time >= NOW() - INTERVAL '{interval_val}';
+            """)
             row = cur.fetchone()
-            if not row:
+            if not row or row["total_events_24h"] == 0:
                 return {
                     "total_events_24h": 0,
                     "max_magnitude_24h": 0.0,
@@ -25,29 +52,91 @@ def get_kpis(current_user: UserPayload = Depends(get_current_user)):
             return dict(row)
 
 @router.get("/stats/hourly", response_model=List[Dict[str, Any]])
-def get_hourly_stats(current_user: UserPayload = Depends(get_current_user)):
-    """Returns event count by hour from curated.v_hourly_counts."""
+def get_hourly_stats(
+    range: str = Query("24h", pattern="^(24h|7d|30d|1y)$"),
+    current_user: UserPayload = Depends(get_current_user)
+):
+    """Returns event count over time for the requested time range."""
+    interval_val = INTERVAL_MAP.get(range, "24 hours")
     with get_api_reader_conn() as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            cur.execute("SELECT hour_bucket, event_count, max_magnitude FROM curated.v_hourly_counts ORDER BY hour_bucket ASC;")
+            if range == "24h":
+                cur.execute("SELECT hour_bucket, event_count, max_magnitude FROM curated.v_hourly_counts ORDER BY hour_bucket ASC;")
+                rows = cur.fetchall()
+                return [dict(r) for r in rows]
+
+            date_trunc = "day" if range in ("30d", "1y") else "hour"
+            cur.execute(f"""
+                SELECT 
+                    date_trunc('{date_trunc}', event_time) AS hour_bucket,
+                    COUNT(*)::int AS event_count,
+                    COALESCE(MAX(magnitude), 0.0)::float AS max_magnitude
+                FROM curated.earthquakes
+                WHERE event_time >= NOW() - INTERVAL '{interval_val}'
+                GROUP BY 1
+                ORDER BY 1 ASC;
+            """)
             rows = cur.fetchall()
             return [dict(r) for r in rows]
 
 @router.get("/stats/regions", response_model=List[Dict[str, Any]])
-def get_region_stats(current_user: UserPayload = Depends(get_current_user)):
-    """Returns top active regions from curated.v_region_activity."""
+def get_region_stats(
+    range: str = Query("24h", pattern="^(24h|7d|30d|1y)$"),
+    current_user: UserPayload = Depends(get_current_user)
+):
+    """Returns top active regions for the requested time range."""
+    interval_val = INTERVAL_MAP.get(range, "24 hours")
     with get_api_reader_conn() as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            cur.execute("SELECT region_name AS region, total_events AS event_count, max_magnitude, avg_magnitude FROM curated.v_region_activity ORDER BY total_events DESC LIMIT 10;")
+            if range == "24h":
+                cur.execute("SELECT region_name AS region, total_events AS event_count, max_magnitude, avg_magnitude FROM curated.v_region_activity ORDER BY total_events DESC LIMIT 10;")
+                rows = cur.fetchall()
+                return [dict(r) for r in rows]
+
+            cur.execute(f"""
+                SELECT 
+                    COALESCE(region, 'Desconocida') AS region,
+                    COUNT(*)::int AS event_count,
+                    COALESCE(MAX(magnitude), 0.0)::float AS max_magnitude,
+                    COALESCE(ROUND(AVG(magnitude), 2), 0.0)::float AS avg_magnitude
+                FROM curated.earthquakes
+                WHERE event_time >= NOW() - INTERVAL '{interval_val}'
+                GROUP BY 1
+                ORDER BY event_count DESC
+                LIMIT 10;
+            """)
             rows = cur.fetchall()
             return [dict(r) for r in rows]
 
 @router.get("/stats/magnitudes", response_model=List[Dict[str, Any]])
-def get_magnitude_distribution(current_user: UserPayload = Depends(get_current_user)):
-    """Returns distribution of events by magnitude class from curated.v_magnitude_distribution."""
+def get_magnitude_distribution(
+    range: str = Query("24h", pattern="^(24h|7d|30d|1y)$"),
+    current_user: UserPayload = Depends(get_current_user)
+):
+    """Returns distribution of events by magnitude class for the requested time range."""
+    interval_val = INTERVAL_MAP.get(range, "24 hours")
     with get_api_reader_conn() as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            cur.execute("SELECT magnitude_class, event_count, percentage FROM curated.v_magnitude_distribution ORDER BY event_count DESC;")
+            if range == "24h":
+                cur.execute("SELECT magnitude_class, event_count, percentage FROM curated.v_magnitude_distribution ORDER BY event_count DESC;")
+                rows = cur.fetchall()
+                return [dict(r) for r in rows]
+
+            cur.execute(f"""
+                WITH totals AS (
+                    SELECT COUNT(*) AS total
+                    FROM curated.earthquakes
+                    WHERE event_time >= NOW() - INTERVAL '{interval_val}'
+                )
+                SELECT 
+                    magnitude_class,
+                    COUNT(*)::int AS event_count,
+                    ROUND((COUNT(*)::numeric / NULLIF((SELECT total FROM totals), 0)) * 100, 2)::float AS percentage
+                FROM curated.earthquakes
+                WHERE event_time >= NOW() - INTERVAL '{interval_val}'
+                GROUP BY magnitude_class
+                ORDER BY event_count DESC;
+            """)
             rows = cur.fetchall()
             return [dict(r) for r in rows]
 

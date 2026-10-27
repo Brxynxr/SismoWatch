@@ -24,17 +24,43 @@ export const App: React.FC = () => {
   const [regionStats, setRegionStats] = useState<RegionStat[]>([]);
   const [magnitudeStats, setMagnitudeStats] = useState<MagnitudeStat[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
+  const [timeRange, setTimeRange] = useState<string>('24h');
+
+  const handleTimeRangeChange = async (range: string) => {
+    setTimeRange(range);
+    if (!user) return;
+    setLoading(true);
+    try {
+      const [kpisData, eventsData, hourlyData, regionsData, magsData] = await Promise.all([
+        api.getKPIs(range).catch(() => null),
+        api.getEvents({ page_size: 40, time_range: range }).catch(() => ({ items: [] })),
+        api.getHourlyStats(range).catch(() => []),
+        api.getRegionStats(range).catch(() => []),
+        api.getMagnitudeDistribution(range).catch(() => [])
+      ]);
+
+      if (kpisData) setKpis(kpisData);
+      if (eventsData?.items) setEvents(eventsData.items);
+      setHourlyStats(hourlyData);
+      setRegionStats(regionsData);
+      setMagnitudeStats(magsData);
+    } catch (err) {
+      console.error("Error updating range:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const loadInitialData = async () => {
     if (!user) return;
     setLoading(true);
     try {
       const [kpisData, eventsData, hourlyData, regionsData, magsData] = await Promise.all([
-        api.getKPIs().catch(() => null),
-        api.getEvents({ page_size: 25 }).catch(() => ({ items: [] })),
-        api.getHourlyStats().catch(() => []),
-        api.getRegionStats().catch(() => []),
-        api.getMagnitudeDistribution().catch(() => [])
+        api.getKPIs('24h').catch(() => null),
+        api.getEvents({ page_size: 35, time_range: '24h' }).catch(() => ({ items: [] })),
+        api.getHourlyStats('24h').catch(() => []),
+        api.getRegionStats('24h').catch(() => []),
+        api.getMagnitudeDistribution('24h').catch(() => [])
       ]);
 
       if (kpisData) setKpis(kpisData);
@@ -112,9 +138,9 @@ export const App: React.FC = () => {
         isLive={isLive}
       />
 
-      {/* 2. Slide-Out Drawer Panel (Catálogo, Analítica, Reportes, Cuarentena) */}
+      {/* 2. Side Section Panel (Catálogo, Analítica, Reportes, Cuarentena) */}
       {currentTab !== 'dashboard' && (
-        <div className="absolute top-0 left-16 sm:left-18 h-full w-[640px] xl:w-[780px] 2xl:w-[860px] max-w-[calc(100vw-5rem)] z-30 bg-slate-950/95 backdrop-blur-2xl border-r border-slate-800 shadow-2xl flex flex-col animate-in slide-in-from-left duration-200">
+        <aside className="h-full w-[540px] xl:w-[650px] 2xl:w-[740px] shrink-0 z-30 bg-slate-950/95 backdrop-blur-2xl border-r border-slate-800 shadow-2xl flex flex-col transition-all duration-300">
           <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-800 bg-slate-900/80">
             <div className="flex items-center gap-2.5">
               {currentTab === 'analytics' && (
@@ -165,7 +191,32 @@ export const App: React.FC = () => {
 
           <div className="flex-1 overflow-y-auto p-4 sm:p-5 custom-scrollbar">
             {currentTab === 'analytics' && (
-              <div className="space-y-6">
+              <div className="space-y-5">
+                {/* Time Range Selector for Analytics */}
+                <div className="flex items-center justify-between bg-slate-900/90 p-2.5 rounded-xl border border-slate-800">
+                  <span className="text-xs font-semibold text-slate-300 px-1">Rango de Análisis:</span>
+                  <div className="flex items-center gap-1.5">
+                    {[
+                      { id: '24h', label: '24 Horas' },
+                      { id: '7d', label: 'Semana' },
+                      { id: '30d', label: 'Mes' },
+                      { id: '1y', label: 'Año' }
+                    ].map((item) => (
+                      <button
+                        key={item.id}
+                        onClick={() => handleTimeRangeChange(item.id)}
+                        className={`px-3 py-1 rounded-lg text-xs font-medium transition-all cursor-pointer ${
+                          timeRange === item.id
+                            ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 font-bold shadow-sm'
+                            : 'text-slate-400 hover:text-white hover:bg-slate-800/80'
+                        }`}
+                      >
+                        {item.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
                 <KPICards kpis={kpis} />
                 <ChartsView
                   hourlyStats={hourlyStats}
@@ -178,7 +229,7 @@ export const App: React.FC = () => {
             {currentTab === 'reports' && <ReportsView user={user} />}
             {currentTab === 'quarantine' && user.role === 'admin' && <QuarantineAdmin />}
           </div>
-        </div>
+        </aside>
       )}
 
       {/* 3. Main Center Cockpit Viewport (Always Active 3D Globe & Live Telemetry) */}
@@ -189,6 +240,8 @@ export const App: React.FC = () => {
           hourlyStats={hourlyStats}
           regionStats={regionStats}
           magnitudeStats={magnitudeStats}
+          timeRange={timeRange}
+          onTimeRangeChange={handleTimeRangeChange}
         />
       </main>
 
