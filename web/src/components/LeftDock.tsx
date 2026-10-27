@@ -5,11 +5,8 @@ import {
   BarChart3,
   FileText,
   AlertTriangle,
-  LogOut,
   Radio,
   Activity,
-  Shield,
-  Eye
 } from 'lucide-react';
 import { User } from '../types';
 
@@ -17,7 +14,7 @@ interface LeftDockProps {
   currentTab: string;
   onSelectTab: (tab: string) => void;
   user: User | null;
-  onLogout: () => void;
+  onLogout?: () => void;
   isLive: boolean;
 }
 
@@ -25,7 +22,6 @@ export const LeftDock: React.FC<LeftDockProps> = ({
   currentTab,
   onSelectTab,
   user,
-  onLogout,
   isLive
 }) => {
   const navItems = [
@@ -126,7 +122,7 @@ export const LeftDock: React.FC<LeftDockProps> = ({
         })}
       </nav>
 
-      {/* Bottom Telemetry & User Controls */}
+      {/* Bottom Telemetry Controls */}
       <div className="flex flex-col items-center gap-3 w-full px-2">
         {/* SSE Live Connection Dot */}
         <div
@@ -147,35 +143,6 @@ export const LeftDock: React.FC<LeftDockProps> = ({
             {isLive ? 'SSE STREAM ACTIVO' : 'DESCONECTADO'}
           </div>
         </div>
-
-        {/* User Role Indicator */}
-        <div
-          title={user?.role === 'admin' ? 'Rol: Administrador' : 'Rol: Visualizador'}
-          className="relative group flex items-center justify-center w-8 h-8 rounded-lg bg-slate-900 border border-slate-800 text-slate-300"
-        >
-          {user?.role === 'admin' ? (
-            <Shield className="w-3.5 h-3.5 text-amber-400" />
-          ) : (
-            <Eye className="w-3.5 h-3.5 text-sky-400" />
-          )}
-
-          {/* Role Tooltip */}
-          <div className="absolute left-full ml-3 top-1/2 -translate-y-1/2 hidden group-hover:flex flex-col whitespace-nowrap bg-slate-900/95 border border-slate-700 rounded-lg px-2.5 py-1 text-[11px] text-slate-200 shadow-xl pointer-events-none z-50">
-            <span className="font-semibold">{user?.username}</span>
-            <span className="text-[10px] text-slate-400 font-mono">
-              {user?.role === 'admin' ? '🛡️ Admin' : '👁️ Viewer'}
-            </span>
-          </div>
-        </div>
-
-        {/* Logout */}
-        <button
-          onClick={onLogout}
-          title="Cerrar sesión"
-          className="p-2 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition-colors cursor-pointer"
-        >
-          <LogOut className="w-4 h-4" />
-        </button>
       </div>
     </aside>
   );

@@ -79,6 +79,8 @@ def get_latest_report(current_user: UserPayload = Depends(get_current_user)):
                 "recommendations": kpis.get("recommendations", []),
                 "total_events": kpis.get("total_events", 0),
                 "max_magnitude": kpis.get("max_magnitude", 0.0),
+                "avg_magnitude": round(float(kpis.get("avg_magnitude", 0.0)), 2),
+                "tsunami_alerts": kpis.get("tsunami_alerts", 0),
                 "regions_affected": kpis.get("regions_affected", []),
                 "model_used": r["model_name"],
                 "execution_seconds": round((r["execution_time_ms"] or 0) / 1000.0, 2),

@@ -69,6 +69,8 @@ export interface AIReport {
   recommendations?: string[];
   total_events: number;
   max_magnitude: number;
+  avg_magnitude?: number;
+  tsunami_alerts?: number;
   regions_affected?: string[];
   model_used?: string;
   execution_seconds?: number;

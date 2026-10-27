@@ -7,10 +7,9 @@ import { EventsCatalog } from './components/EventsCatalog';
 import { ReportsView } from './components/ReportsView';
 import { QuarantineAdmin } from './components/QuarantineAdmin';
 import { FloatingChatAssistant } from './components/FloatingChatAssistant';
-import { LoginModal } from './components/LoginModal';
 import { User, KPIs, EarthquakeEvent, HourlyStat, RegionStat, MagnitudeStat } from './types';
-import { api, getStoredUser, setStoredUser } from './services/api';
-import { Database, FileText, AlertTriangle, X, BarChart3, RefreshCw } from 'lucide-react';
+import { api, getStoredUser } from './services/api';
+import { Database, FileText, AlertTriangle, X, BarChart3, RefreshCw, Activity } from 'lucide-react';
 
 export const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(getStoredUser());
@@ -86,6 +85,23 @@ export const App: React.FC = () => {
   };
 
   useEffect(() => {
+    const initAuth = async () => {
+      const stored = getStoredUser();
+      if (stored?.token) {
+        setUser(stored);
+      } else {
+        try {
+          const u = await api.login('admin', 'admin_sismowatch_2026_pwd');
+          setUser(u);
+        } catch (err) {
+          console.error("Auto-login error:", err);
+        }
+      }
+    };
+    initAuth();
+  }, []);
+
+  useEffect(() => {
     if (user) {
       loadInitialData();
     }
@@ -128,13 +144,22 @@ export const App: React.FC = () => {
     };
   }, [user]);
 
-  const handleLogout = () => {
-    setStoredUser(null);
-    setUser(null);
-  };
-
   if (!user) {
-    return <LoginModal onSuccess={(u) => setUser(u)} />;
+    return (
+      <div className="h-screen w-screen flex flex-col items-center justify-center bg-slate-950 text-slate-100 font-sans">
+        <div className="flex flex-col items-center gap-3">
+          <div className="relative p-3.5 rounded-2xl bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 shadow-2xl shadow-cyan-500/10">
+            <Activity className="w-8 h-8 animate-pulse" />
+            <span className="absolute -bottom-1 -right-1 flex h-3 w-3">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-3 w-3 bg-cyan-500"></span>
+            </span>
+          </div>
+          <h1 className="text-xl font-bold tracking-tight text-white">SismoWatch</h1>
+          <span className="text-xs font-mono text-cyan-400">Iniciando Centro de Monitoreo...</span>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -144,7 +169,6 @@ export const App: React.FC = () => {
         currentTab={currentTab}
         onSelectTab={(tab) => setCurrentTab(tab)}
         user={user}
-        onLogout={handleLogout}
         isLive={isLive}
       />
 

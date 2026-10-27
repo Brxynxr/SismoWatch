@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import Globe, { GlobeMethods } from 'react-globe.gl';
 import { EarthquakeEvent } from '../types';
-import { RotateCcw, ShieldAlert, Waves, ZoomIn, ZoomOut, Compass, Layers } from 'lucide-react';
+import { Waves, ZoomIn, ZoomOut, Compass } from 'lucide-react';
 
 interface SeismicGlobe3DProps {
   events: EarthquakeEvent[];
@@ -319,17 +319,16 @@ export const SeismicGlobe3D: React.FC<SeismicGlobe3DProps> = ({
         showAtmosphere={true}
         atmosphereColor="#38bdf8"
         atmosphereAltitude={0.16}
-        // Earthquake Epicenters (Surface Buttons + Laser Beam on Click)
+        // Earthquake Epicenters (Surface Nodes + Laser Beacons when toggled)
         pointsData={events}
         pointLat={(d: any) => d.latitude}
         pointLng={(d: any) => d.longitude}
         pointAltitude={(d: any) => {
-          if (d.event_id === selectedEvent?.event_id) return 0.42;
-          return showAllBeacons ? Math.max(0.06, (d.magnitude / 10) * 0.35) : 0;
+          return showAllBeacons ? Math.max(0.08, (d.magnitude / 10) * 0.38) : 0;
         }}
         pointRadius={(d: any) => {
-          if (d.event_id === selectedEvent?.event_id) return 0.25;
-          return showAllBeacons ? 0.08 : Math.max(0.4, (d.magnitude / 10) * 0.85);
+          if (d.event_id === selectedEvent?.event_id) return 0.55;
+          return showAllBeacons ? 0.12 : Math.max(0.35, (d.magnitude / 10) * 0.8);
         }}
         pointColor={(d: any) =>
           d.event_id === selectedEvent?.event_id
@@ -346,28 +345,11 @@ export const SeismicGlobe3D: React.FC<SeismicGlobe3DProps> = ({
         ringMaxRadius={(d: any) => d.maxR}
         ringPropagationSpeed={(d: any) => d.propagationSpeed}
         ringRepeatPeriod={(d: any) => d.repeatPeriod}
-        // 3D Tactical Target HUD Label on selected beacon
-        labelsData={selectedEvent ? [selectedEvent] : []}
-        labelLat={(d: any) => d.latitude}
-        labelLng={(d: any) => d.longitude}
-        labelText={(d: any) => `🎯 M${Number(d.magnitude).toFixed(1)} • ${d.place}`}
-        labelSize={1.3}
-        labelColor={() => '#00f5ff'}
-        labelDotRadius={0.3}
-        labelAltitude={0.44}
+        labelsData={[]}
       />
 
       {/* Cockpit Overlay: Top Controls */}
       <div className="absolute top-4 left-4 z-20 flex items-center gap-2">
-        <button
-          onClick={resetView}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-900/80 hover:bg-slate-800/90 text-slate-300 hover:text-white border border-slate-700/80 backdrop-blur text-xs font-medium shadow-lg transition-colors"
-          title="Restablecer vista global"
-        >
-          <RotateCcw className="w-3.5 h-3.5 text-sky-400" />
-          Vista Global
-        </button>
-
         <button
           onClick={() => setIsRotating(!isRotating)}
           className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border backdrop-blur text-xs font-medium shadow-lg transition-colors cursor-pointer ${
@@ -380,26 +362,13 @@ export const SeismicGlobe3D: React.FC<SeismicGlobe3DProps> = ({
           <Compass className={`w-3.5 h-3.5 ${isRotating ? 'animate-spin' : ''}`} />
           {isRotating ? 'Auto-Rotación: ON' : 'Auto-Rotación: OFF'}
         </button>
-
-        <button
-          onClick={() => setShowAllBeacons(!showAllBeacons)}
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border backdrop-blur text-xs font-medium shadow-lg transition-colors cursor-pointer ${
-            showAllBeacons
-              ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40'
-              : 'bg-slate-900/80 text-slate-400 border-slate-700/80 hover:text-white'
-          }`}
-          title="Alternar entre ver balizas solo al hacer clic o en todos los sismos"
-        >
-          <Layers className="w-3.5 h-3.5 text-cyan-400" />
-          {showAllBeacons ? 'Balizas: Todas' : 'Baliza: Al Clic'}
-        </button>
       </div>
 
       {/* Cockpit Overlay: Magnitudes & PGA Legend */}
       <div className="absolute bottom-4 left-4 z-20 bg-slate-900/90 backdrop-blur border border-slate-800 rounded-xl p-3 text-xs shadow-2xl space-y-2 pointer-events-auto">
         <div className="flex items-center gap-1.5 font-semibold text-slate-200 border-b border-slate-800 pb-1.5">
           <Waves className="w-4 h-4 text-cyan-400" />
-          <span>Balizas Láser & Telemetría PGA</span>
+          <span>Intensidad Sísmica & Magnitudes</span>
         </div>
         <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-[11px]">
           <div className="flex items-center gap-2">
@@ -420,8 +389,7 @@ export const SeismicGlobe3D: React.FC<SeismicGlobe3DProps> = ({
           </div>
         </div>
         <div className="text-[10px] text-cyan-400 font-mono border-t border-slate-800 pt-1 flex items-center justify-between">
-          <span>◎ Clic en sismo proyecta su línea láser vertical</span>
-          <span className="text-slate-400">🎯 Focaliza</span>
+          <span>◎ Clic en sismo focaliza la cámara 3D</span>
         </div>
       </div>
     </div>

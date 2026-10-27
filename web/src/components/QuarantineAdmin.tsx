@@ -41,6 +41,34 @@ export const QuarantineAdmin: React.FC = () => {
     }
   };
 
+  const getNaturalRejectionReason = (failedRules?: string[], rawReason?: string): string => {
+    const rules = (failedRules || []).join(' ');
+    const reason = rawReason || '';
+
+    if (rules.includes('DUPLICATE_EVENT_ID_IN_BATCH') || reason.includes('DUPLICATE_EVENT_ID_IN_BATCH')) {
+      return 'Fue rechazado porque el ID de evento ya existía duplicado dentro del mismo lote de datos.';
+    }
+    if (rules.includes('LATITUDE_OUT_OF_BOUNDS') || reason.includes('LATITUDE')) {
+      return 'Fue rechazado porque la latitud registrada está fuera del rango geoespacial admisible (-90° a 90°).';
+    }
+    if (rules.includes('LONGITUDE_OUT_OF_BOUNDS') || reason.includes('LONGITUDE')) {
+      return 'Fue rechazado porque la longitud registrada está fuera del rango geoespacial admisible (-180° a 180°).';
+    }
+    if (rules.includes('MAGNITUDE') || reason.includes('MAGNITUDE')) {
+      return 'Fue rechazado porque el valor de magnitud no es física o estadísticamente válido (-2.0 a 10.0).';
+    }
+    if (rules.includes('DEPTH') || reason.includes('DEPTH')) {
+      return 'Fue rechazado porque la profundidad del sismo excede los límites geológicos terrestres (-5 a 1000 km).';
+    }
+    if (rules.includes('EMPTY_OR_NULL_EVENT_ID') || reason.includes('EMPTY')) {
+      return 'Fue rechazado por carecer de identificador único de sismo (campo vacío o nulo).';
+    }
+    if (rules.includes('FUTURE_EVENT_TIME') || reason.includes('FUTURE')) {
+      return 'Fue rechazado porque la fecha y hora del evento registra una marca temporal en el futuro.';
+    }
+    return `Fue rechazado por detección de inconsistencia en las reglas de calidad Pandera: ${rawReason || 'Esquema Silver no conforme'}.`;
+  };
+
   return (
     <div className="space-y-6">
       {/* Top Banner & Control Actions */}
@@ -113,9 +141,9 @@ export const QuarantineAdmin: React.FC = () => {
         </div>
 
         {loading ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
-            {Array.from({ length: 6 }).map((_, i) => (
-              <div key={i} className="p-4 rounded-xl border border-slate-800 bg-slate-900/40 animate-pulse h-44 flex flex-col justify-between">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="p-4 rounded-xl border border-slate-800 bg-slate-900/40 animate-pulse h-48 flex flex-col justify-between">
                 <div className="h-4 bg-slate-800 rounded w-1/3 mb-2"></div>
                 <div className="h-3 bg-slate-800 rounded w-2/3 mb-4"></div>
                 <div className="h-12 bg-slate-800 rounded mb-2"></div>
@@ -127,7 +155,7 @@ export const QuarantineAdmin: React.FC = () => {
             ✓ Cero registros en cuarentena. Todos los datos ingresados cumplen las reglas de calidad Pandera.
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {quarantineItems.map((item) => (
               <div
                 key={item.quarantine_id}
@@ -135,49 +163,51 @@ export const QuarantineAdmin: React.FC = () => {
               >
                 <div>
                   {/* Top Header: Quarantine ID & Event ID */}
-                  <div className="flex items-start justify-between gap-2 mb-2">
-                    <span className="font-mono text-[10px] px-2 py-0.5 rounded bg-amber-500/10 border border-amber-500/30 text-amber-300 font-bold">
+                  <div className="flex items-start justify-between gap-2 mb-2.5">
+                    <span className="font-mono text-xs px-2 py-0.5 rounded bg-amber-500/10 border border-amber-500/30 text-amber-300 font-bold">
                       Cuarentena #{item.quarantine_id}
                     </span>
-                    <span className="font-mono text-xs font-bold text-slate-300 truncate max-w-[150px]">
-                      {item.event_id || 'ID_VACÍO'}
+                    <span className="font-mono text-xs font-bold text-slate-300">
+                      ID: {item.event_id || 'ID_VACÍO'}
                     </span>
                   </div>
 
                   {/* Failed Rules Badges */}
                   <div className="mb-2.5">
-                    <span className="text-[10px] font-mono text-slate-500 uppercase block mb-1">Reglas Violadas:</span>
-                    <div className="flex flex-wrap gap-1">
+                    <span className="text-[10px] font-mono text-slate-500 uppercase block mb-1">Reglas Técnicas Violadas:</span>
+                    <div className="flex flex-wrap gap-1.5">
                       {item.failed_rules && item.failed_rules.length > 0 ? (
                         item.failed_rules.map((r, i) => (
                           <span
                             key={i}
-                            className="px-1.5 py-0.5 rounded text-[10px] font-mono bg-rose-500/15 text-rose-300 border border-rose-500/30 font-semibold"
+                            className="px-2 py-0.5 rounded text-[10px] font-mono bg-rose-500/15 text-rose-300 border border-rose-500/30 font-semibold"
                           >
                             {r}
                           </span>
                         ))
                       ) : (
-                        <span className="px-1.5 py-0.5 rounded text-[10px] font-mono bg-amber-500/15 text-amber-300 border border-amber-500/30">
+                        <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-amber-500/15 text-amber-300 border border-amber-500/30">
                           ANOMALÍA_ESQUEMA
                         </span>
                       )}
                     </div>
                   </div>
 
-                  {/* Rejection Reason */}
-                  <div className="p-2.5 rounded-lg bg-slate-950/80 border border-slate-800/80 mb-3">
-                    <span className="text-[9px] font-mono uppercase text-slate-500 block mb-0.5">Motivo del Rechazo:</span>
-                    <p className="text-[11px] font-mono text-slate-300 line-clamp-2 leading-relaxed" title={item.rejection_reason}>
-                      {item.rejection_reason || 'Rechazado por validación de esquema en Silver'}
+                  {/* Rejection Reason in Natural Language */}
+                  <div className="p-3 rounded-lg bg-rose-950/20 border border-rose-900/40 mb-3 space-y-1">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-rose-400 block">
+                      Motivo del Rechazo:
+                    </span>
+                    <p className="text-xs text-rose-200/95 leading-relaxed font-sans font-medium">
+                      {getNaturalRejectionReason(item.failed_rules, item.rejection_reason)}
                     </p>
                   </div>
                 </div>
 
                 {/* Footer: Date and JSON inspection button */}
-                <div className="flex items-center justify-between pt-2 border-t border-slate-800/80 text-[11px] text-slate-400">
-                  <span className="flex items-center gap-1 font-mono text-[10px]">
-                    <Clock className="w-3 h-3 text-slate-500" />
+                <div className="flex items-center justify-between pt-2.5 border-t border-slate-800/80 text-xs text-slate-400">
+                  <span className="flex items-center gap-1.5 font-mono text-[11px]">
+                    <Clock className="w-3.5 h-3.5 text-slate-500" />
                     {new Date(item.quarantined_at).toLocaleString([], {
                       month: 'short',
                       day: 'numeric',
@@ -187,9 +217,9 @@ export const QuarantineAdmin: React.FC = () => {
                   </span>
                   <button
                     onClick={() => setSelectedPayload(item.payload)}
-                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-sky-400 hover:text-sky-300 text-[11px] font-medium border border-slate-700 transition-colors cursor-pointer"
+                    className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-sky-400 hover:text-sky-300 text-xs font-semibold border border-slate-700 transition-colors cursor-pointer"
                   >
-                    <FileCode className="w-3 h-3" />
+                    <FileCode className="w-3.5 h-3.5" />
                     Ver JSON
                   </button>
                 </div>

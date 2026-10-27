@@ -48,6 +48,57 @@ export const ChatAssistant: React.FC = () => {
     }
   };
 
+  const renderFormattedChatText = (text: string) => {
+    if (!text) return null;
+
+    const lines = text.split('\n');
+
+    return (
+      <div className="space-y-1.5 leading-relaxed text-xs sm:text-[13px]">
+        {lines.map((line, idx) => {
+          const trimmed = line.trim();
+          if (!trimmed) {
+            return <div key={idx} className="h-1" />;
+          }
+
+          const isBullet = /^[*-]\s+/.test(trimmed);
+          const lineContent = isBullet ? trimmed.replace(/^[*-]\s+/, '') : trimmed;
+
+          const parts = lineContent.split(/(\*\*[^*]+\*\*)/g);
+
+          const renderedLine = parts.map((part, partIdx) => {
+            if (part.startsWith('**') && part.endsWith('**')) {
+              const boldText = part.slice(2, -2);
+              return (
+                <strong key={partIdx} className="font-bold text-sky-300">
+                  {boldText}
+                </strong>
+              );
+            }
+            return part;
+          });
+
+          if (isBullet) {
+            return (
+              <div key={idx} className="flex items-start gap-2 pl-1 py-0.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 shrink-0 mt-1.5 shadow-sm shadow-cyan-400/50" />
+                <div className="flex-1 text-slate-200">
+                  {renderedLine}
+                </div>
+              </div>
+            );
+          }
+
+          return (
+            <p key={idx} className="text-slate-200">
+              {renderedLine}
+            </p>
+          );
+        })}
+      </div>
+    );
+  };
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -115,13 +166,9 @@ export const ChatAssistant: React.FC = () => {
             <Bot className="w-5 h-5" />
           </div>
           <div>
-            <h3 className="text-sm font-bold text-white flex items-center gap-2">
-              Asistente Conversacional Grounded
-              <span className="text-[10px] px-2 py-0.5 rounded-full font-mono bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                POLP role_chat_reader
-              </span>
+            <h3 className="text-sm font-bold text-white">
+              SismoWatch
             </h3>
-            <p className="text-xs text-slate-400">Consultas Text-to-SQL de solo lectura sobre Gold con prueba de respaldo</p>
           </div>
         </div>
 
@@ -193,7 +240,7 @@ export const ChatAssistant: React.FC = () => {
                     : 'bg-slate-800/80 border border-slate-700/80 text-slate-100 rounded-bl-none shadow-sm'
                 }`}
               >
-                {m.text}
+                {m.sender === 'user' ? m.text : renderFormattedChatText(m.text)}
               </div>
 
               {/* Grounding & SQL Metadata Container */}

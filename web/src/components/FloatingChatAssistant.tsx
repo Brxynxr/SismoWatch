@@ -121,6 +121,57 @@ export const FloatingChatAssistant: React.FC = () => {
     }
   };
 
+  const renderFormattedChatText = (text: string) => {
+    if (!text) return null;
+
+    const lines = text.split('\n');
+
+    return (
+      <div className="space-y-1.5 leading-relaxed text-xs sm:text-[13px]">
+        {lines.map((line, idx) => {
+          const trimmed = line.trim();
+          if (!trimmed) {
+            return <div key={idx} className="h-1" />;
+          }
+
+          const isBullet = /^[*-]\s+/.test(trimmed);
+          const lineContent = isBullet ? trimmed.replace(/^[*-]\s+/, '') : trimmed;
+
+          const parts = lineContent.split(/(\*\*[^*]+\*\*)/g);
+
+          const renderedLine = parts.map((part, partIdx) => {
+            if (part.startsWith('**') && part.endsWith('**')) {
+              const boldText = part.slice(2, -2);
+              return (
+                <strong key={partIdx} className="font-bold text-sky-300">
+                  {boldText}
+                </strong>
+              );
+            }
+            return part;
+          });
+
+          if (isBullet) {
+            return (
+              <div key={idx} className="flex items-start gap-2 pl-1 py-0.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 shrink-0 mt-1.5 shadow-sm shadow-cyan-400/50" />
+                <div className="flex-1 text-slate-200">
+                  {renderedLine}
+                </div>
+              </div>
+            );
+          }
+
+          return (
+            <p key={idx} className="text-slate-200">
+              {renderedLine}
+            </p>
+          );
+        })}
+      </div>
+    );
+  };
+
   return (
     <div className="fixed bottom-5 right-5 z-50">
       {/* Minimalist Floating Robot Button (Collapsed) */}
@@ -145,13 +196,9 @@ export const FloatingChatAssistant: React.FC = () => {
                 <Bot className="w-4 h-4" />
               </div>
               <div>
-                <h4 className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
-                  Asistente IA Grounded
-                  <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                    POLP Read-Only
-                  </span>
+                <h4 className="text-xs font-bold text-slate-200">
+                  SismoWatch
                 </h4>
-                <p className="text-[10px] text-slate-400">Text-to-SQL sobre Gold con verificación estricta</p>
               </div>
             </div>
 
@@ -224,13 +271,13 @@ export const FloatingChatAssistant: React.FC = () => {
 
                 <div className={`max-w-[85%] space-y-2 ${msg.sender === 'user' ? 'items-end' : 'items-start'}`}>
                   <div
-                    className={`p-3 rounded-xl leading-relaxed whitespace-pre-wrap ${
+                    className={`p-3 rounded-xl leading-relaxed ${
                       msg.sender === 'user'
-                        ? 'bg-sky-600 text-white rounded-br-xs'
+                        ? 'bg-sky-600 text-white rounded-br-xs whitespace-pre-wrap'
                         : 'bg-slate-900 border border-slate-800 text-slate-200 rounded-bl-xs'
                     }`}
                   >
-                    {msg.text}
+                    {msg.sender === 'user' ? msg.text : renderFormattedChatText(msg.text)}
                   </div>
 
                   {/* Proof of Grounding & SQL Inspector */}
