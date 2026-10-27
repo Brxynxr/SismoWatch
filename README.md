@@ -187,8 +187,22 @@ Para la sustentación ante el Tech Lead o evaluador, utiliza estos argumentos t�
 │   ├── ARQUITECTURA.md                   # Especificación técnica Medallion
 │   ├── OPENMETADATA.md                   # Linaje y gobernanza
 │   └── security_audit.txt                # Reporte Bandit & Gitleaks
-├── tests/                                # 34 pruebas unitarias y de integración
+├── tests/                                # 40 pruebas unitarias y de integración
 ├── docker-compose.yml                    # Orquestación de todo el stack
 ├── PLAN.md                               # Plan de ejecución y matriz de trazabilidad
 └── README.md
 ```
+
+---
+
+## ⚖️ Limitaciones Conocidas y Mejoras Futuras
+
+### Limitaciones Actuales
+1. **Frecuencia de Fuente Pública:** La USGS actualiza su feed de última hora (`all_hour.geojson`) cada ~1 minuto. Consultas con frecuencia sub-segundo no aportan nuevos datos y saturarían la API pública.
+2. **Backfill Histórico sin Filtros de Micro-sismos:** Para consultas de más de 30 días, la USGS limita la respuesta a eventos de magnitud $\ge 2.5$ para prevenir payloads superiores a 50 MB en una sola llamada HTTP.
+3. **Dependencia de Hardware Local para LLM:** En entornos con CPU compartida sin aceleración por GPU, el motor local de Ollama puede presentar latencias de entre 5 y 15 segundos para síntesis de reportes complejos (mitigado con fallback a Groq en Modo Cloud).
+
+### Mejoras Futuras Planificadas (Evolución a Producción)
+1. **Lakehouse con DuckDB / Trino:** Habilitar consultas federadas directas sobre las particiones Parquet en MinIO (`s3://sismowatch-lake/bronze/` y `gold/`) sin pasar por PostgreSQL.
+2. **Vector Database (pgvector / Qdrant):** Indexación de resúmenes históricos para búsqueda semántica de eventos análogos (ej: "buscar terremotos con mecanismo focal similar al de Japón 2011").
+3. **Alertas Push Automatizadas:** Integración de webhooks para canales de Telegram y Slack ante activación de alerta de tsunami (`tsunami_alert = true`).
