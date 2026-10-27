@@ -494,3 +494,17 @@ sismowatch/
 2. **Recorte 2:** Estilos avanzados del mapa Leaflet $\rightarrow$ Marcadores circulares con popup básico.
 3. **Recorte 3:** Detección de anomalías multidimensional $\rightarrow$ Z-Score unidimensional sobre tasa horaria.
 4. **INMUTABLE (Criterio de Aprobación):** Pipeline E2E Airflow, Schemas y Roles Medallion, Pandera Lote/Fila, Chat Local de solo lectura con guardrails y `docker compose up -d` funcional.
+
+
+---
+
+## 12. Evolución a Producción y Criterios de Escala (Ecosistema Apache)
+
+Para defender ante el jurado por qué **NO** se incluyeron Spark, MinIO ni Atlas en este MVP:
+
+1. **Eficiencia y Anti-Sobreingeniería:** Para un feed de miles de eventos al día, una sola instancia de PostgreSQL 16 con índices optimizados resuelve el procesamiento en milisegundos con un presupuesto de recursos mínimo.
+2. **Linaje Actual:** El linaje de datos de extremo a extremo está implementado mediante **Airflow Datasets**, que enlazan la ingesta en Bronze con la transformación en Silver y la publicación en Gold de forma determinista y auditable.
+3. **Criterios de Transición a Producción:**
+   * **Apache Spark:** Se incorporará cuando el volumen supere 100 GB/día o se requiera procesar streams IoT de acelerómetros de alta frecuencia que excedan la capacidad de un único nodo.
+   * **Object Storage (S3 / MinIO):** Se incorporará cuando el almacenamiento de Bronze deba persistirse indefinidamente en formato Parquet particionado por fecha/año, abaratando almacenamiento en un 80%.
+   * **Apache Atlas / OpenMetadata:** Se incorporará cuando el catálogo supere los 15 datasets transversales y existan equipos federados de datos requiriendo linaje automático a nivel de columna.

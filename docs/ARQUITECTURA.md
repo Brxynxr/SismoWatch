@@ -98,3 +98,20 @@ El sistema implementa una arquitectura de streaming transparente:
 * **Ingesta:** Micro-lotes cada 5 minutos orquestados por Airflow.
 * **Distribución en Vivo:** FastAPI expone `/api/stream` vía Server-Sent Events (SSE). Un generador asíncrono sondea la vista `curated.v_kpis_24h` y eventos recientes cada 5-10 segundos.
 * **Consumo Frontend:** Para sortear la limitación de la API nativa `EventSource` (que no permite enviar cabeceras `Authorization: Bearer <token>`), la interfaz de React utiliza `fetch()` con lectura de flujo (`ReadableStream`), manteniendo la autenticación JWT estricta y reconexión automática sin sacrificar seguridad.
+
+
+---
+
+## 6. Evolución a Producción y Criterios de Escala (Ecosistema Apache)
+
+En la fase actual de **SismoWatch**, introducir componentes como Apache Spark, MinIO o Apache Atlas constituiría **sobreingeniería injustificada** (añadiría más de 3 contenedores adicionales, 4 GB de RAM extra y múltiples puntos únicos de fallo que pondrían en riesgo la estabilidad del comando único `docker compose up -d`).
+
+Actualmente, el linaje y gobierno de datos están garantizados de forma nativa por los **Airflow Datasets (Inlets y Outlets)**, permitiendo que la transformación reaccione automáticamente a la actualización de la capa Bronze (`raw.usgs_events`).
+
+Sin embargo, para una evolución hacia un producto de datos global de escala petabyte, se definen los siguientes criterios concretos para su incorporación:
+
+| Componente | ¿Cuándo incorporarlo? (Criterio de Escala) | ¿Por qué y qué problema resuelve? |
+| :--- | :--- | :--- |
+| **Apache Spark** | Cuando el volumen supere **100 GB/día** o se integren redes de sensores sísmicos IoT de alta frecuencia (miles de lecturas por segundo) que desborden la memoria/CPU de un único nodo PostgreSQL. | Permite procesamiento paralelo distribuido en clúster (RDDs y Spark DataFrames) para agregaciones geoespaciales complejas y cálculo de matrices de covarianza a escala sin estrangular la base de datos relacional. |
+| **Object Storage (S3 / MinIO)** | Cuando el historial acumulado supere **500 GB** o se requiera desacoplar almacenamiento de cómputo para auditoría regulatoria de largo plazo. | Permite archivar la capa Bronze en formato columnar comprimido (**Apache Parquet con compresión Snappy/ZSTD**), reduciendo costos de almacenamiento en un 80% y habilitando consultas federadas mediante Trino o Athena sin impactar el disco local. |
+| **Catálogo de Linaje (Atlas / OpenMetadata)** | Cuando la organización crezca a **más de 15 pipelines interdependientes** y múltiples equipos interdisciplinarios (Data Engineering, Data Science, Compliance) consuman y publiquen datos. | Centraliza la gobernanza empresarial, catálogo de términos de negocio, control de linaje automatizado columna por columna (column-level lineage) y auditoría de accesos PII/sensibles en una plataforma corporativa unificada. |
