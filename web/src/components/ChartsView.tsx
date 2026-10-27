@@ -44,9 +44,9 @@ export const ChartsView: React.FC<ChartsViewProps> = ({
         };
       case 'Año':
         return {
-          title: 'Actividad Sísmica Mensual (Último Año)',
-          metricUnit: 'Escala: Meses del año',
-          subtitle: 'Eje X: Meses del año en orden cronológico • Eje Y: Cantidad de sismos registrados por mes',
+          title: 'Actividad Sísmica Mensual (Año en Curso)',
+          metricUnit: 'Escala: Meses (Ene - Mes Actual)',
+          subtitle: 'Eje X: Meses del año (desde enero hasta el mes en curso) • Eje Y: Cantidad de sismos registrados por mes',
           yAxisLabel: 'Sismos / mes'
         };
       default:
@@ -79,9 +79,11 @@ export const ChartsView: React.FC<ChartsViewProps> = ({
         endOfWeek.setDate(d.getDate() + 6);
         tooltipTitle = `Semana ${idx + 1} (${d.toLocaleDateString([], { day: 'numeric', month: 'short' })} - ${endOfWeek.toLocaleDateString([], { day: 'numeric', month: 'short' })})`;
       } else {
-        // Año
-        axisLabel = d.toLocaleDateString([], { month: 'short' });
-        tooltipTitle = `Mes: ${d.toLocaleDateString([], { month: 'long', year: 'numeric' })}`;
+        // Año: asegurar timeZone UTC para evitar desplazamientos por huso horario del navegador
+        const rawMonth = d.toLocaleDateString([], { month: 'short', timeZone: 'UTC' });
+        axisLabel = rawMonth.charAt(0).toUpperCase() + rawMonth.slice(1);
+        const fullMonth = d.toLocaleDateString([], { month: 'long', year: 'numeric', timeZone: 'UTC' });
+        tooltipTitle = `Mes: ${fullMonth.charAt(0).toUpperCase() + fullMonth.slice(1)}`;
       }
 
       return {

@@ -22,17 +22,30 @@ def get_kpis(
     interval_val = INTERVAL_MAP.get(range, "24 hours")
     with get_api_reader_conn() as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            cur.execute("""
-                SELECT 
-                    COUNT(*)::int AS total_events_24h,
-                    COALESCE(MAX(magnitude), 0.0)::float AS max_magnitude_24h,
-                    COALESCE(ROUND(AVG(magnitude), 2), 0.0)::float AS avg_magnitude_24h,
-                    COUNT(*) FILTER (WHERE tsunami_alert = true)::int AS tsunami_alerts_24h,
-                    MAX(event_time) AS latest_event_time,
-                    COUNT(*) FILTER (WHERE status = 'reviewed')::int AS reviewed_events_24h
-                FROM curated.earthquakes
-                WHERE event_time >= NOW() - (%s)::interval;
-            """, (interval_val,))
+            if range == "1y":
+                cur.execute("""
+                    SELECT 
+                        COUNT(*)::int AS total_events_24h,
+                        COALESCE(MAX(magnitude), 0.0)::float AS max_magnitude_24h,
+                        COALESCE(ROUND(AVG(magnitude), 2), 0.0)::float AS avg_magnitude_24h,
+                        COUNT(*) FILTER (WHERE tsunami_alert = true)::int AS tsunami_alerts_24h,
+                        MAX(event_time) AS latest_event_time,
+                        COUNT(*) FILTER (WHERE status = 'reviewed')::int AS reviewed_events_24h
+                    FROM curated.earthquakes
+                    WHERE event_time >= date_trunc('year', NOW());
+                """)
+            else:
+                cur.execute("""
+                    SELECT 
+                        COUNT(*)::int AS total_events_24h,
+                        COALESCE(MAX(magnitude), 0.0)::float AS max_magnitude_24h,
+                        COALESCE(ROUND(AVG(magnitude), 2), 0.0)::float AS avg_magnitude_24h,
+                        COUNT(*) FILTER (WHERE tsunami_alert = true)::int AS tsunami_alerts_24h,
+                        MAX(event_time) AS latest_event_time,
+                        COUNT(*) FILTER (WHERE status = 'reviewed')::int AS reviewed_events_24h
+                    FROM curated.earthquakes
+                    WHERE event_time >= NOW() - (%s)::interval;
+                """, (interval_val,))
             row = cur.fetchone()
             if not row or row["total_events_24h"] == 0:
                 return {
@@ -51,17 +64,47 @@ def get_hourly_stats(
     current_user: UserPayload = Depends(get_current_user)
 ):
     """Returns event count over time for the requested time range."""
-    interval_val = INTERVAL_MAP.get(range, "24 hours")
-    if range == "1y":
-        date_trunc = "month"
-    elif range == "30d":
-        date_trunc = "week"
-    elif range == "7d":
-        date_trunc = "day"
-    else:
-        date_trunc = "hour"
     with get_api_reader_conn() as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            if range == "1y":
+                # Year-To-Date: de Enero del año en curso hasta el mes actual.
+                # Al comenzar un nuevo mes, generate_series lo incluye automáticamente.
+                cur.execute("""
+                    WITH months AS (
+                        SELECT generate_series(
+                            date_trunc('year', NOW()),
+                            date_trunc('month', NOW()),
+                            '1 month'::interval
+                        ) AS bucket
+                    ),
+                    stats AS (
+                        SELECT 
+                            date_trunc('month', event_time) AS bucket,
+                            COUNT(*)::int AS event_count,
+                            COALESCE(MAX(magnitude), 0.0)::float AS max_magnitude
+                        FROM curated.earthquakes
+                        WHERE event_time >= date_trunc('year', NOW())
+                        GROUP BY 1
+                    )
+                    SELECT 
+                        months.bucket AS hour_bucket,
+                        COALESCE(stats.event_count, 0) AS event_count,
+                        COALESCE(stats.max_magnitude, 0.0) AS max_magnitude
+                    FROM months
+                    LEFT JOIN stats ON months.bucket = stats.bucket
+                    ORDER BY months.bucket ASC;
+                """)
+                rows = cur.fetchall()
+                return [dict(r) for r in rows]
+
+            interval_val = INTERVAL_MAP.get(range, "24 hours")
+            if range == "30d":
+                date_trunc = "week"
+            elif range == "7d":
+                date_trunc = "day"
+            else:
+                date_trunc = "hour"
+
             cur.execute("""
                 SELECT 
                     date_trunc(%s, event_time) AS hour_bucket,
@@ -84,18 +127,32 @@ def get_region_stats(
     interval_val = INTERVAL_MAP.get(range, "24 hours")
     with get_api_reader_conn() as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            cur.execute("""
-                SELECT 
-                    COALESCE(region, 'Desconocida') AS region,
-                    COUNT(*)::int AS event_count,
-                    COALESCE(MAX(magnitude), 0.0)::float AS max_magnitude,
-                    COALESCE(ROUND(AVG(magnitude), 2), 0.0)::float AS avg_magnitude
-                FROM curated.earthquakes
-                WHERE event_time >= NOW() - (%s)::interval
-                GROUP BY 1
-                ORDER BY event_count DESC
-                LIMIT 10;
-            """, (interval_val,))
+            if range == "1y":
+                cur.execute("""
+                    SELECT 
+                        COALESCE(region, 'Desconocida') AS region,
+                        COUNT(*)::int AS event_count,
+                        COALESCE(MAX(magnitude), 0.0)::float AS max_magnitude,
+                        COALESCE(ROUND(AVG(magnitude), 2), 0.0)::float AS avg_magnitude
+                    FROM curated.earthquakes
+                    WHERE event_time >= date_trunc('year', NOW())
+                    GROUP BY 1
+                    ORDER BY event_count DESC
+                    LIMIT 10;
+                """)
+            else:
+                cur.execute("""
+                    SELECT 
+                        COALESCE(region, 'Desconocida') AS region,
+                        COUNT(*)::int AS event_count,
+                        COALESCE(MAX(magnitude), 0.0)::float AS max_magnitude,
+                        COALESCE(ROUND(AVG(magnitude), 2), 0.0)::float AS avg_magnitude
+                    FROM curated.earthquakes
+                    WHERE event_time >= NOW() - (%s)::interval
+                    GROUP BY 1
+                    ORDER BY event_count DESC
+                    LIMIT 10;
+                """, (interval_val,))
             rows = cur.fetchall()
             return [dict(r) for r in rows]
 
@@ -108,21 +165,38 @@ def get_magnitude_distribution(
     interval_val = INTERVAL_MAP.get(range, "24 hours")
     with get_api_reader_conn() as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            cur.execute("""
-                WITH totals AS (
-                    SELECT COUNT(*) AS total
+            if range == "1y":
+                cur.execute("""
+                    WITH totals AS (
+                        SELECT COUNT(*) AS total
+                        FROM curated.earthquakes
+                        WHERE event_time >= date_trunc('year', NOW())
+                    )
+                    SELECT 
+                        magnitude_class,
+                        COUNT(*)::int AS event_count,
+                        ROUND((COUNT(*)::numeric / NULLIF((SELECT total FROM totals), 0)) * 100, 2)::float AS percentage
+                    FROM curated.earthquakes
+                    WHERE event_time >= date_trunc('year', NOW())
+                    GROUP BY magnitude_class
+                    ORDER BY event_count DESC;
+                """)
+            else:
+                cur.execute("""
+                    WITH totals AS (
+                        SELECT COUNT(*) AS total
+                        FROM curated.earthquakes
+                        WHERE event_time >= NOW() - (%s)::interval
+                    )
+                    SELECT 
+                        magnitude_class,
+                        COUNT(*)::int AS event_count,
+                        ROUND((COUNT(*)::numeric / NULLIF((SELECT total FROM totals), 0)) * 100, 2)::float AS percentage
                     FROM curated.earthquakes
                     WHERE event_time >= NOW() - (%s)::interval
-                )
-                SELECT 
-                    magnitude_class,
-                    COUNT(*)::int AS event_count,
-                    ROUND((COUNT(*)::numeric / NULLIF((SELECT total FROM totals), 0)) * 100, 2)::float AS percentage
-                FROM curated.earthquakes
-                WHERE event_time >= NOW() - (%s)::interval
-                GROUP BY magnitude_class
-                ORDER BY event_count DESC;
-            """, (interval_val, interval_val))
+                    GROUP BY magnitude_class
+                    ORDER BY event_count DESC;
+                """, (interval_val, interval_val))
             rows = cur.fetchall()
             return [dict(r) for r in rows]
 
