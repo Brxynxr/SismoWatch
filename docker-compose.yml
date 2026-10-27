@@ -171,6 +171,22 @@ services:
       - sismowatch-net
 
   # ----------------------------------------------------------------------------
+  # React + Vite Web Platform (Nginx Reverse Proxy & UI)
+  # ----------------------------------------------------------------------------
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+    container_name: sismowatch-web
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api
+    networks:
+      - sismowatch-net
+
+  # ----------------------------------------------------------------------------
   # Ollama (Servicio Opcional para entornos sin Ollama en Host)
   # ----------------------------------------------------------------------------
   ollama:
