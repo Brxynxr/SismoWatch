@@ -32,7 +32,7 @@ Validaciones:
 
 3. POLÍTICAS DE ACCESO Y MÍNIMO PRIVILEGIO (POLP)
 --------------------------------------------------------------------------------
-Roles de Base de Datos Verificados con 34/34 tests unitarios pasando:
+Roles de Base de Datos Verificados con 40/40 tests unitarios e integración pasando:
   - role_ingestion: Restringido a INSERT/SELECT en raw.usgs_events.
   - role_transformation: Acceso a raw, staging y curated. Prohibido DDL.
   - role_api_reader: Solo SELECT sobre curated.* y curated.v_quarantine. Cero acceso a raw y staging.

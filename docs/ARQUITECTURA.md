@@ -4,154 +4,202 @@
 La arquitectura de **SismoWatch** resuelve la necesidad crítica de transformar un feed público, efímero y no validado de eventos sísmicos globales (USGS Earthquake Catalog) en un **producto de datos empresarial confiable, seguro, auditable y de alto valor analítico**.
 
 ### ¿Para quién y qué decisiones habilita?
-* **Equipos de Operaciones:** Detección inmediata de sismos de magnitud crítica con alerta de tsunami para activación de protocolos de contingencia y asignación de recursos.
-* **Equipos de Gestión de Riesgo:** Análisis de tendencias temporales, distribución de magnitudes y enjambres sísmicos para actualización de modelos de vulnerabilidad territorial.
-* **Liderazgo Técnico y Auditoría:** Garantía de trazabilidad completa desde el dato crudo (Bronze) hasta el consumo de negocio (Gold), con métricas de calidad y aislamiento de seguridad estricto.
+* **Equipos de Monitoreo y Operaciones:** Detección en tiempo casi real de sismos de magnitud crítica con potencial de tsunami para activación de protocolos de contingencia y asignación de recursos.
+* **Equipos de Gestión del Riesgo y Geociencias:** Análisis de patrones espacio-temporales, distribución de magnitudes por Ley de Gutenberg-Richter, radios teóricos de percepción y enjambres sísmicos para actualización de modelos de vulnerabilidad territorial.
+* **Liderazgo Técnico y Oficiales de Auditoría/Seguridad:** Garantía de trazabilidad completa desde el dato crudo (Bronze) hasta el consumo analítico y conversacional con IA (Gold), garantizando cero alucinaciones y estricto principio de mínimo privilegio (POLP).
 
 ---
 
-## 2. Decisión de Arquitectura: Patrón Medallion y Data Lakehouse Híbrido (Hot/Cold Tiering)
+## 2. Recorrido Visual de la Plataforma Implementada
 
-Se implementa una arquitectura híbrida **Medallion Lakehouse** combinando dos niveles de almacenamiento:
-1. **Hot Tier (OLTP Transaccional - PostgreSQL 16):** Responde a las consultas de baja latencia del frontend web, streaming SSE en `/api/stream`, mapa interactivo con Leaflet y ejecución Text-to-SQL del asistente de IA.
-2. **Cold Tier (Data Lakehouse - MinIO S3 + Apache Parquet):** Almacenamiento histórico inmutable particionado por fecha con compresión columnar `snappy`, habilitando archivado a largo plazo, compatibilidad analítica masiva (DuckDB/Spark/Trino) y desacoplamiento de cómputo.
+| Cockpit 3D Globe & Consola de Telemetría | Dashboard Analítico y Distribución Temporal |
+| :---: | :---: |
+| ![Cockpit 3D Globe](img/cockpit_3d_globe.png) | ![Analítica y KPIs](img/analytics_dashboard.png) |
+| *Globo 3D WebGL con balizas láser, estrellas cósmicas y telemetría dinámica.* | *Evolución acumulada mensual YTD (2026), distribución por magnitud Richter y regiones activas.* |
 
-```
-       [ USGS Public API ]
-               |
-               v (HTTP GET cada 5 min)
-   +-----------------------+
-   |  Apache Airflow 2.10  |  (LocalExecutor, TaskFlow API)
-   +-----------+-----------+
-               |
-    ===========|======================================================
-    CAPA 1: BRONZE (raw.usgs_events & MinIO Parquet)
-    - Hot: PostgreSQL raw.usgs_events (JSONB inmutable, append-only).
-    - Cold: s3://sismowatch-lake/bronze/year=YYYY/month=MM/day=DD/raw_events.parquet (snappy).
-    ==================================================================
-               |
-               v [Validación Pandera (lazy=True)]
-    ===========|======================================================
-    CAPA 2: SILVER (staging & MinIO Parquet)
-    - Hot: staging.events (limpios) & staging.quarantine (rechazos).
-    - Cold: s3://sismowatch-lake/silver/valid/year=YYYY/month=MM/events_clean.parquet
-    - Cold: s3://sismowatch-lake/silver/quarantine/year=YYYY/month=MM/quarantined.parquet
-    ==================================================================
-               |
-               v [Upsert condicional + Enriquecimiento]
-    ===========|======================================================
-    CAPA 3: GOLD (curated & MinIO Parquet)
-    - Hot: curated.earthquakes (region, impact_radius_km, magnitude_class).
-    - Cold: s3://sismowatch-lake/gold/year=YYYY/month=MM/earthquakes_curated.parquet
-    - Vistas: v_kpis_24h, v_hourly_counts, v_region_activity,
-              v_magnitude_distribution, v_quarantine, v_events_chat.
-    ==================================================================
-         ^                           ^
-         | (role_api_reader)         | (role_chat_reader: read-only, timeout 3s)
-    +----+------------------+   +----+------------------+
-    |   FastAPI Backend     |   |   Agente Chat Local   | (Ollama qwen2.5-coder)
-    +-----------+-----------+   +-----------+-----------+
-                \                           /
-                 v                         v
-               +-----------------------------+
-               |    React + Vite Frontend    | (Dashboard, Live SSE, Chat)
-               +-----------------------------+
-```
+| Boletín Oficial de Sismicidad Global (Reportes IA) | Panel de Cuarentena y Calidad (Admin) |
+| :---: | :---: |
+| ![Reportes Ejecutivos](img/executive_report.png) | ![Panel de Cuarentena](img/quarantine_admin.png) |
+| *Resumen ejecutivo estructurado en formato documento oficial, validación anti-alucinaciones.* | *Visualización de registros rechazados en 2 columnas, diagnóstico en lenguaje natural.* |
+
+| Asistente Conversacional Grounded (Proof of Grounding) |
+| :---: |
+| ![Chat Asistente IA](img/grounded_chat.png) |
+| *Traducción Text-to-SQL segura sobre `curated.v_events_chat`, síntesis limpia y reconocimiento por voz.* |
 
 ---
 
-## 3. Modelo de Seguridad y Mínimo Privilegio (POLP)
+## 3. Diagrama de Arquitectura End-to-End (Medallion Lakehouse)
 
-La base de datos cuenta con una partición estricta de responsabilidades por rol:
-
-```
-[role_ingestion]      ---> INSERT/SELECT en raw.usgs_events (CERO acceso a staging/curated)
-[role_transformation] ---> SELECT en raw, SELECT/INSERT/UPDATE en staging y curated
-[role_api_reader]     ---> SOLO SELECT en tablas y vistas de curated (CERO acceso a raw/staging)
-[role_chat_reader]    ---> SOLO SELECT en curated.v_events_chat (default_transaction_read_only=on, timeout=3s)
-[role_api_logger]     ---> SOLO INSERT en curated.ai_runs
+```mermaid
+flowchart TD
+    USGS["USGS Public Feed API\n(/all_hour.geojson)"] -->|Airflow DAG: usgs_ingest_feed\nrole_ingestion (Cada 5 min)| Bronze[("CAPA 1: BRONZE\nPostgreSQL: raw.usgs_events\nJSONB inmutable + SHA-256")]
+    Bronze -->|Export Parquet Snappy| MinIOBronze[("MinIO Cold Tier\ns3://sismowatch-lake/bronze/")]
+    
+    Bronze -.->|Dataset Trigger: raw_events_dataset| DagTransform["Airflow DAG: usgs_transform_quality\nrole_transformation"]
+    
+    subgraph QualityEngine ["Motor de Calidad Pandera (Circuit Breaker & Quarantine)"]
+        BatchCheck{"Validación Lote\n(Esquema, Volumen, Frescura <120m)"}
+        RowCheck{"Validación Fila (lazy=True)\n(Coords, Fechas, Magnitud [-1, 10])"}
+    end
+    
+    DagTransform --> BatchCheck
+    BatchCheck -->|Lote Corrupto| CircuitBreak["Fallo de Tarea y Alerta\n(Cero propagación a Silver/Gold)"]
+    BatchCheck -->|Lote Conforme| RowCheck
+    
+    RowCheck -->|Fila Rechazada| StgQuarantine[("CAPA 2: SILVER (Cuarentena)\nPostgreSQL: staging.quarantine\n(failed_rules, payload JSONB)")]
+    RowCheck -->|Fila Conforme| StgEvents[("CAPA 2: SILVER (Limpio)\nPostgreSQL: staging.events\n(Tipado normalizado)")]
+    
+    StgQuarantine --> MinIOQuarantine[("MinIO Cold Tier\nsilver/quarantine/")]
+    StgEvents --> MinIOSilver[("MinIO Cold Tier\nsilver/valid/")]
+    
+    StgEvents -->|Upsert condicional: updated_time\nCálculo Radio PGA + Región| Gold[("CAPA 3: GOLD (Curated)\nPostgreSQL: curated.earthquakes\n(region, impact_radius_km)")]
+    Gold --> MinIOGold[("MinIO Cold Tier\ngold/earthquakes_curated.parquet")]
+    
+    subgraph Consumo ["Capa de Consumo y Servicios"]
+        Vistas["Vistas Especializadas:\n- v_kpis_24h\n- v_hourly_counts\n- v_region_activity\n- v_magnitude_distribution\n- v_events_chat"]
+        API["FastAPI REST & SSE Stream\n(:8000 / role_api_reader)"]
+        ChatAgent["Asistente IA Grounded\n(Ollama / Groq / role_chat_reader)"]
+        Frontend["React 18 + Vite + Leaflet + 3D Globe\n(:3000)"]
+    end
+    
+    Gold --> Vistas
+    Vistas --> API
+    Vistas --> ChatAgent
+    API --> Frontend
+    ChatAgent --> Frontend
 ```
 
-### Seguridad en la Plataforma:
-* **Sin tabla de usuarios en BD:** Credenciales de `admin` y `viewer` residen en variables de entorno. Al arrancar la API, las contraseñas se validan contra hashes `bcrypt` en memoria.
-* **Acciones de Administración Aisladas:** El backfill histórico y la regeneración de reportes de IA no ejecutan escrituras directas desde la API, sino que invocan la **REST API de Apache Airflow**.
-* **Protección contra Inyección en LLM:** Los textos de ubicación (`place`) se sanitizan antes de interactuar con el LLM. El agente conversacional utiliza un validador sintáctico AST/regex que solo autoriza sentencias `SELECT` sobre `curated.v_events_chat`, respaldado físicamente por `role_chat_reader`.
+---
+
+## 4. Modelo de Datos Relacional (Diagrama Entidad-Relación)
+
+```mermaid
+erDiagram
+    RAW_USGS_EVENTS {
+        bigserial id PK
+        varchar event_id
+        jsonb payload
+        varchar payload_hash "SHA-256"
+        varchar source_feed
+        timestamptz fetched_at
+    }
+
+    STAGING_EVENTS {
+        varchar event_id PK
+        numeric magnitude
+        varchar mag_type
+        varchar place
+        timestamptz event_time
+        timestamptz updated_time
+        numeric longitude
+        numeric latitude
+        numeric depth_km
+        boolean tsunami_alert
+        integer significance
+        varchar status
+        varchar event_type
+        text usgs_url
+        timestamptz staged_at
+    }
+
+    STAGING_QUARANTINE {
+        bigserial quarantine_id PK
+        bigint raw_id FK
+        varchar event_id
+        text[] failed_rules
+        text rejection_reason
+        jsonb payload
+        timestamptz quarantined_at
+    }
+
+    CURATED_EARTHQUAKES {
+        varchar event_id PK
+        numeric magnitude
+        varchar magnitude_class
+        varchar mag_type
+        varchar place
+        varchar region
+        numeric impact_radius_km
+        timestamptz event_time
+        timestamptz updated_time
+        numeric longitude
+        numeric latitude
+        numeric depth_km
+        boolean tsunami_alert
+        integer significance
+        varchar status
+        varchar event_type
+        text usgs_url
+        timestamptz created_at
+        timestamptz last_modified_at
+    }
+
+    CURATED_QUALITY_RUNS {
+        bigserial run_id PK
+        varchar execution_id
+        integer total_records
+        integer passed_records
+        integer quarantined_records
+        numeric quality_score
+        numeric freshness_minutes
+        jsonb validation_summary
+        timestamptz executed_at
+    }
+
+    CURATED_AI_RUNS {
+        bigserial run_id PK
+        varchar task_type
+        varchar model_name
+        text prompt_template
+        jsonb input_data
+        text generated_text
+        numeric numeric_fidelity_score
+        boolean has_hallucinations
+        integer latency_ms
+        integer tokens_used
+        numeric estimated_cost_usd
+        timestamptz executed_at
+    }
+
+    RAW_USGS_EVENTS ||--o| STAGING_QUARANTINE : "origina rechazo"
+    RAW_USGS_EVENTS ||--o| STAGING_EVENTS : "transformado a"
+    STAGING_EVENTS ||--o| CURATED_EARTHQUAKES : "promovido a"
+```
 
 ---
 
-## 4. Estrategia de Calidad de Datos
+## 5. Matriz de Seguridad y Mínimo Privilegio (POLP en PostgreSQL)
 
-La calidad opera en dos niveles complementarios:
-1. **Nivel Lote (Bloqueante):** Si el volumen de sismos es anormalmente nulo, la frescura excede el umbral tolerado o el esquema GeoJSON viene corrompido, la tarea en Airflow falla de forma inmediata y **ningún dato ingresa a Gold**.
-2. **Nivel Fila (Cuarentena no bloqueante):** Si una fila individual tiene coordenadas fuera de rango (latitud $[-90, 90]$, longitud $[-180, 180]$) o magnitud absurda, Pandera con `lazy=True` la aísla y la inserta en `staging.quarantine`, permitiendo que el resto del lote limpio continúe hacia `curated.earthquakes`.
+El sistema garantiza que ninguna credencial única tenga acceso ilimitado a la base de datos:
 
----
-
-## 5. Estrategia de Consumo en Tiempo Real
-
-El sistema implementa una arquitectura de streaming transparente:
-* **Ingesta:** Micro-lotes cada 5 minutos orquestados por Airflow.
-* **Distribución en Vivo:** FastAPI expone `/api/stream` vía Server-Sent Events (SSE). Un generador asíncrono sondea la vista `curated.v_kpis_24h` y eventos recientes cada 5-10 segundos.
-* **Consumo Frontend:** Para sortear la limitación de la API nativa `EventSource` (que no permite enviar cabeceras `Authorization: Bearer <token>`), la interfaz de React utiliza `fetch()` con lectura de flujo (`ReadableStream`), manteniendo la autenticación JWT estricta y reconexión automática sin sacrificar seguridad.
-
+| Rol de Base de Datos | Usuario | Permisos Otorgados | Restricciones Duras y Prohibiciones |
+| :--- | :--- | :--- | :--- |
+| **`role_ingestion`** | `user_ingestion` | `INSERT, SELECT` sobre `raw.usgs_events` | Prohibido cualquier acceso a `staging` y `curated`. |
+| **`role_transformation`** | `user_transformation` | `SELECT` en `raw`; `SELECT, INSERT, UPDATE, DELETE` en `staging` y `curated`. | Prohibido DDL (modificación de esquemas) o acceso a catálogos de sistema. |
+| **`role_api_reader`** | `user_api_reader` | `SELECT` sobre tablas y vistas de `curated`. | Prohibido todo acceso a `raw` y `staging`; prohibida toda escritura (`INSERT, UPDATE, DELETE`). |
+| **`role_chat_reader`** | `user_chat_reader` | `SELECT` **única y exclusivamente** sobre `curated.v_events_chat`. | `default_transaction_read_only = on`, `statement_timeout = 3000ms`. Prohibido acceso a tablas base u otros schemas. |
+| **`role_api_logger`** | `user_api_logger` | `INSERT` en `curated.ai_runs` y `SELECT (run_id)`. | Cero permisos de lectura sobre eventos sísmicos o registros en cuarentena. |
 
 ---
 
-## 6. Arquitectura Híbrida Hot/Cold Tiering y Data Lakehouse (MinIO + Parquet)
+## 6. Trade-offs de Arquitectura y Decisiones Defendibles
 
-SismoWatch implementa una arquitectura híbrida de almacenamiento dividida en dos capas:
-
-### 1. Hot Tier (PostgreSQL 16)
-* **Objetivo:** Explotación analítica y transaccional en tiempo real.
-* **Consumidores:** FastAPI (`/api/events`, `/api/kpis`, `/api/reports`), SSE Stream en `/api/stream`, mapa interactivo Leaflet y asistente conversacional Text-to-SQL.
-* **Garantías:** Integridad relacional, llaves foráneas, índices B-Tree y GiST, aislamiento por roles de base de datos (POLP).
-
-### 2. Cold Tier (MinIO Object Storage + Apache Parquet)
-* **Objetivo:** Archivo histórico inmutable, optimizado para escaneos masivos OLAP y consultas federadas.
-* **Formato:** Apache Parquet columnar con compresión `snappy`.
-* **Esquema de Particionamiento Medallion en bucket `sismowatch-lake`:**
-  * **Bronze:** `bronze/year=YYYY/month=MM/day=DD/raw_events.parquet`
-  * **Silver Válidos:** `silver/valid/year=YYYY/month=MM/events_clean.parquet`
-  * **Silver Cuarentena:** `silver/quarantine/year=YYYY/month=MM/quarantined.parquet`
-  * **Gold Curados:** `gold/year=YYYY/month=MM/earthquakes_curated.parquet`
-* **Resiliencia:** La exportación a MinIO está desacoplada del pipeline de base de datos mediante un patrón no bloqueante (`try/except` con log de advertencia), asegurando que cualquier indisponibilidad transitoria del servicio de almacenamiento de objetos jamás detenga la operación crítica en PostgreSQL.
-* **Consola de Administración:** Accesible en `http://localhost:9001` con las credenciales de entorno `MINIO_ROOT_USER` y `MINIO_ROOT_PASSWORD`.
+| Decisión Técnica | Alternativa Evaluada | Razón de la Elección y Justificación | Trade-off Asumido |
+| :--- | :--- | :--- | :--- |
+| **Medallion Lakehouse Híbrido (PostgreSQL 16 + MinIO Parquet)** | Arquitectura Lambda tradicional o PostgreSQL monolítico | Combina la baja latencia de PostgreSQL (Hot Tier para UI y SSE) con la escalabilidad y compatibilidad columnar inmutable de Parquet en MinIO (Cold Tier). | Ligero incremento en lógica de exportación dual en Airflow; mitigado mediante desacoplamiento no bloqueante. |
+| **Airflow Datasets (Data-Aware Scheduling)** | Consultas periódicas tipo cron en cada DAG | El DAG de transformación reacciona al instante exacto en que la ingesta finaliza con éxito (`Dataset("sismowatch://raw/usgs_events")`), eliminando esperas pasivas y sobrecarga innecesaria. | Requiere que ambos DAGs compartan el mismo URI semántico de Dataset. |
+| **Validación en Dos Niveles con Pandera (`lazy=True`)** | Pydantic fila por fila o Great Expectations | Pandera ejecuta validaciones vectorizadas de alto rendimiento sobre DataFrames. A nivel lote valida frescura y volumen (circuit breaker bloqueante); a nivel fila desvía los registros inválidos a `staging.quarantine` sin detener los datos limpios. | Mayor consumo de memoria temporal durante la validación del lote. |
+| **Proof of Grounding (Text-to-SQL + AST Guardrail)** | RAG Vectorial con Embeddings de texto | Los datos sísmicos son numéricos y tabulares. Los embeddings pierden precisión al realizar agregaciones numéricas exactas (ej. MAX, AVG, COUNT). Text-to-SQL sobre una vista restringida con timeout de 3s garantiza 100% de fidelidad numérica. | El modelo requiere comprender la estructura de la consulta SQL (mitigado con `qwen2.5-coder:1.5b` o Groq). |
+| **Server-Sent Events (SSE) con `fetch()` y `ReadableStream`** | WebSockets bidireccionales o Polling HTTP | El monitoreo sísmico requiere flujo unidireccional servidor $\rightarrow$ cliente. SSE funciona sobre HTTP estándar, atraviesa proxies y firewalls sin configuración especial y reconecta automáticamente. El uso de `ReadableStream` permite enviar el header `Authorization: Bearer <token>`. | No admite comunicación bidireccional en el mismo socket (el chat utiliza endpoints POST independientes). |
 
 ---
 
-## 7. Evolución a Producción y Criterios de Escala (Ecosistema Apache)
+## 7. Evolución a Producción y Criterios de Escala
 
-Para una evolución hacia un producto de datos global de escala petabyte, se definen los siguientes criterios concretos para la incorporación de componentes adicionales:
-
-| Componente | ¿Cuándo incorporarlo? (Criterio de Escala) | ¿Por qué y qué problema resuelve? |
+| Componente Futuro | Criterio de Activación (Threshold) | Beneficio y Justificación Técnica |
 | :--- | :--- | :--- |
-| **Apache Spark** | Cuando el volumen supere **100 GB/día** o se integren redes de sensores sísmicos IoT de alta frecuencia (miles de lecturas por segundo) que desborden la memoria/CPU de un único nodo PostgreSQL. | Permite procesamiento paralelo distribuido en clúster (RDDs y Spark DataFrames) para agregaciones geoespaciales complejas y cálculo de matrices de covarianza a escala sin estrangular la base de datos relacional. |
-| **Motor de Consulta Federada (Trino / DuckDB)** | Cuando múltiples analistas requieran consultar directamente el Cold Tier en MinIO Parquet sin pasar por PostgreSQL. | Permite ejecutar consultas SQL estándar directamente sobre el lago de datos Parquet particionado en MinIO con latencias de segundos. |
-| **Catálogo de Linaje Empresarial (Atlas / OpenMetadata)** | Cuando la organización crezca a **más de 15 pipelines interdependientes** y múltiples equipos interdisciplinarios (Data Engineering, Data Science, Compliance) consuman y publiquen datos. | Centraliza la gobernanza empresarial, catálogo de términos de negocio, control de linaje automatizado columna por columna (column-level lineage) y auditoría de accesos PII/sensibles en una plataforma corporativa unificada. |
-
-
----
-
-## 7. Elementos Diferenciadores de SismoWatch (Innovación y Valor de Negocio)
-
-Para transformar un pipeline estándar en una solución de monitoreo de grado empresarial, SismoWatch implementa tres capacidades diferenciadoras:
-
-### 1. Simulador Geoespacial de Impacto Sísmico (Radio Teórico de Aceleración PGA)
-En lugar de únicamente mostrar marcadores estáticos en las coordenadas del epicentro, SismoWatch calcula en la capa Gold el **radio de percepción teórica** en kilómetros donde la aceleración del terreno ($PGA$) superó el umbral perceptible de la Escala de Intensidad Mercalli Modificada (MMI III+), basándose en la relación empírica de atenuación sísmica:
-$$R_{\text{impacto}} = 10^{(0.45 \times \text{magnitud} - 0.8)}$$
-En la plataforma web (Leaflet), se dibuja dinámicamente un radio de cobertura semitransparente que permite a los operadores de riesgo estimar de un vistazo qué infraestructuras y ciudades se vieron comprometidas.
-
-### 2. Proof of Grounding & Explainable AI en el Asistente Conversacional
-Cada respuesta analítica generada por el agente local (`qwen2.5-coder:1.5b`) incluye una tarjeta de auditoría transparente que expone:
-* La sentencia SQL exacta generada y ejecutada sobre `curated.v_events_chat`.
-* El rol de base de datos (`role_chat_reader`) con su restricción de solo lectura y timeout.
-* La latencia de ejecución en milisegundos en PostgreSQL.
-* El porcentaje de coincidencia numérica verificado por el guardrail numérico (cero alucinaciones).
-
-### 3. Medidor Dinámico de SLA de Frescura y Circuit Breaker (Chaos Testing)
-Un widget en el Dashboard mide en tiempo real la frescura de los datos frente al SLA estricto de 5 minutos. Además, el sistema incorpora un mecanismo de contingencia (*Circuit Breaker*) que conmuta a una réplica local validada ante caídas o rate-limiting de la API pública del USGS, garantizando **cero pantallas en blanco**.
-
----
-
-## 8. Gobernanza y Linaje con OpenMetadata
-Para garantizar trazabilidad empresarial y catalogación de metadatos, SismoWatch incorpora compatibilidad nativa con **OpenMetadata**. Toda la arquitectura de linaje, catálogo de schemas Medallion y mapeo de pruebas de calidad Pandera se encuentra documentada en [docs/OPENMETADATA.md](OPENMETADATA.md).
+| **Apache Spark / Flink** | Ingesta masiva $> 100\text{ GB/día}$ o redes sísmicas de alta frecuencia ($> 5,000\text{ lecturas/s}$). | Procesamiento en streaming distribuido y ventanas de tumbling para calcular correlaciones de aceleración sin saturar la CPU de PostgreSQL. |
+| **Motor de Consulta Federada (DuckDB / Trino)** | Equipos analíticos que requieran consultar el Cold Tier directamente. | Ejecución de SQL analítico directo sobre los Parquets particionados en MinIO (`s3://sismowatch-lake/gold/`) con latencia de segundos y coste cero en base de datos transaccional. |
+| **Gobernanza Empresarial (OpenMetadata)** | Despliegue en organizaciones con múltiples equipos y requerimientos de compliance. | Trazabilidad automatizada de linaje columna por columna, catálogo de términos de negocio y auditoría de accesos sensibles. |
+| **Vector DB (pgvector / Qdrant)** | Búsqueda de eventos análogos por mecanismo focal. | Comparación semántica de tensores de momento sísmico y espectros de respuesta frente a terremotos históricos. |

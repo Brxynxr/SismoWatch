@@ -54,7 +54,8 @@ export const CockpitDashboard: React.FC<CockpitDashboardProps> = ({
     setFeedRange(newRange);
     setIsUpdating(true);
     try {
-      const data = await api.getEvents({ time_range: newRange, page_size: 150 });
+      const targetLimit = newRange === '30d' ? 2600 : newRange === '7d' ? 1600 : 300;
+      const data = await api.getEvents({ time_range: newRange, page_size: targetLimit });
       if (data) {
         if (data.items) setFeedEvents(data.items);
         if (typeof data.total === 'number') setTotalRegistered(data.total);

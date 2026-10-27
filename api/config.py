@@ -46,8 +46,8 @@ class Settings(BaseSettings):
 
     # Airflow Trigger API
     AIRFLOW_URL: str = os.getenv("AIRFLOW_URL", "http://localhost:8080")
-    AIRFLOW_USER: str = os.getenv("AIRFLOW_ADMIN_USER", "admin")
-    AIRFLOW_PASSWORD: str = os.getenv("AIRFLOW_ADMIN_PASSWORD", "admin")
+    AIRFLOW_USER: str = os.getenv("AIRFLOW_ADMIN_USER", os.getenv("AIRFLOW_API_USER", "sismo_admin"))
+    AIRFLOW_PASSWORD: str = os.getenv("AIRFLOW_ADMIN_PASSWORD", os.getenv("AIRFLOW_API_PASSWORD", "sismo_admin_secure_pwd_2026"))
 
     model_config = SettingsConfigDict(
         env_file=".env",

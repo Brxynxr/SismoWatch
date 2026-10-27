@@ -8,9 +8,30 @@
 [![Ollama](https://img.shields.io/badge/Ollama-Local_Qwen2.5--Coder-000000?logo=ollama&logoColor=white)](https://ollama.ai/)
 [![Pandera](https://img.shields.io/badge/Data_Quality-Pandera_Lazy-FF6F00)](https://pandera.readthedocs.io/)
 [![Security](https://img.shields.io/badge/Security-Gitleaks_%26_Bandit_Passed-brightgreen)](https://github.com/gitleaks/gitleaks)
-[![Tests](https://img.shields.io/badge/Tests-39%2F39_Passing-success)]()
+[![Tests](https://img.shields.io/badge/Tests-40%2F40_Passing-success)]()
 
 **SismoWatch** es una plataforma de grado empresarial para la ingestión, auditoría de calidad, transformación analítica, enriquecimiento geofísico y explotación conversacional con IA de datos sísmicos mundiales en tiempo casi real desde el catálogo público de la **USGS (United States Geological Survey)**.
+
+---
+
+## 📸 Recorrido Visual de la Plataforma
+
+| Cockpit 3D Globe & Centro de Telemetría | Dashboard Analítico y Distribución Temporal |
+| :---: | :---: |
+| ![Cockpit 3D Globe](docs/img/cockpit_3d_globe.png) | ![Analítica y KPIs](docs/img/analytics_dashboard.png) |
+| *Globo 3D WebGL con balizas láser, estrellas cósmicas y telemetría dinámica (24h: 199 sismos, 7d: 1,536 sismos, 30d: 2,462 sismos).* | *Evolución acumulada mensual YTD (2026), distribución por magnitud Richter y regiones activas.* |
+
+| Boletín Oficial de Sismicidad Global (Reportes IA) | Panel de Cuarentena y Calidad (Admin) |
+| :---: | :---: |
+| ![Reportes Ejecutivos](docs/img/executive_report.png) | ![Panel de Cuarentena](docs/img/quarantine_admin.png) |
+| *Resumen ejecutivo estructurado en formato documento oficial, validación anti-alucinaciones y exportación.* | *Visualización de registros rechazados en 2 columnas, diagnóstico en lenguaje natural y backfill reactivo.* |
+
+| Asistente Conversacional Grounded (Proof of Grounding) |
+| :---: |
+| ![Chat Asistente IA](docs/img/grounded_chat.png) |
+| *Traducción Text-to-SQL segura sobre `curated.v_events_chat`, síntesis con formato limpio y control por voz.* |
+
+---
 
 ---
 
@@ -99,7 +120,7 @@ docker compose up -d
 | :--- | :--- | :--- | :--- |
 | **Plataforma Web (React)** | http://localhost:3000 | `viewer` / `viewer_sismowatch_2026_pwd`<br>`admin` / `admin_sismowatch_2026_pwd` | Dashboard, Mapa PGA, Recharts, Catálogo CSV, Chat IA y Panel de Cuarentena. |
 | **API REST (FastAPI / Swagger)** | http://localhost:8000/docs | Autenticación Bearer JWT (`/auth/login`) | Endpoints Medallion, SSE Streaming (`/api/stream`) y Chat Grounded. |
-| **Apache Airflow 2.10** | http://localhost:8080 | `admin` / `admin` | Orquestador LocalExecutor con 4 DAGs activos. |
+| **Apache Airflow 2.10** | http://localhost:8080 | `sismo_admin` / `sismo_admin_secure_pwd_2026` | Orquestador LocalExecutor con 4 DAGs activos y Datasets reactivos. |
 | **MinIO Object Storage (Console)** | http://localhost:9001 | `sismowatch_minio_admin` / `minio_sismowatch_2026_pwd` | Consola Web Data Lakehouse para explorar Parquets Medallion (`sismowatch-lake`). |
 | **MinIO S3 API** | http://localhost:9000 | Credenciales S3 v4 | Endpoint de almacenamiento de objetos compatible con AWS S3. |
 | **PostgreSQL 16** | `localhost:5432` | Base de datos `sismowatch_db` | Schemas `raw`, `staging` y `curated` con POLP. |
@@ -110,7 +131,7 @@ docker compose up -d
 
 ## 🧪 Verificación y Pruebas Automatizadas
 
-El proyecto cuenta con **39 pruebas unitarias y de integración** pasando al 100%:
+El proyecto cuenta con **40 pruebas unitarias y de integración** pasando al 100%:
 
 ```bash
 PYTHONPATH=airflow:api .venv/bin/pytest tests/ -vv
@@ -119,7 +140,7 @@ PYTHONPATH=airflow:api .venv/bin/pytest tests/ -vv
 ### Cobertura de Tests:
 * `tests/test_roles_permissions.py` (13 tests): Valida permisos positivos y negativos de cada rol (`role_ingestion`, `role_transformation`, `role_api_reader`, `role_chat_reader`, `role_api_logger`).
 * `tests/test_minio_parquet.py` (5 tests): Valida particionamiento Medallion en Parquet, compresión Snappy, deduplicación de eventos y resiliencia no bloqueante ante fallos de conexión.
-* `tests/test_quality.py` (4 tests): Valida circuit breaker a nivel lote (esquema, volumen, frescura) y aislamiento a nivel fila en cuarentena con Pandera `lazy=True`.
+* `tests/test_quality.py` (5 tests): Valida circuit breaker a nivel lote (esquema, volumen, frescura), aislamiento a nivel fila en cuarentena con Pandera `lazy=True` y serialización datetime en payloads JSONB.
 * `tests/test_transform.py` (5 tests): Valida extracción de región, clasificación de magnitud, radio de impacto PGA y hashing SHA-256.
 * `tests/test_dags_integrity.py` (2 tests): Valida sintaxis AST e importación limpia en DagBag dentro del contenedor Airflow (4 DAGs sin errores).
 * `tests/test_api_rbac.py` (10 tests): Valida endpoints de FastAPI, tokens JWT, restricción 403 a cuarentena para `viewer`, acceso 200 para `admin`, descarga CSV y guardrail SQL.
