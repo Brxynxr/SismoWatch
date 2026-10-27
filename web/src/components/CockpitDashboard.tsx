@@ -73,16 +73,38 @@ export const CockpitDashboard: React.FC<CockpitDashboardProps> = ({
     return 'text-sky-400 bg-sky-500/10 border-sky-500/30';
   };
 
-  const formatEventTime = (isoString?: string): string => {
-    if (!isoString) return '--:--';
+  const formatEventTime = (isoString?: string): { relative: string; dateStr: string } => {
+    if (!isoString) return { relative: '--', dateStr: '--:--' };
     try {
       const d = new Date(isoString);
-      if (feedRange === '24h') {
-        return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      const now = new Date();
+      const diffMs = now.getTime() - d.getTime();
+      const diffMins = Math.floor(diffMs / (1000 * 60));
+      const diffHours = Math.floor(diffMins / 60);
+      const diffDays = Math.floor(diffHours / 24);
+
+      let relative = '';
+      if (diffMins < 1) {
+        relative = 'Ahora mismo';
+      } else if (diffMins < 60) {
+        relative = `Hace ${diffMins} min`;
+      } else if (diffHours < 24) {
+        relative = `Hace ${diffHours} h`;
+      } else if (diffDays === 1) {
+        relative = 'Ayer';
+      } else {
+        relative = `Hace ${diffDays} días`;
       }
-      return `${d.toLocaleDateString([], { month: 'short', day: 'numeric' })} ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+
+      const timeStr = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      const dayStr = d.toLocaleDateString([], { month: 'short', day: 'numeric' });
+      const dateStr = feedRange === '24h'
+        ? (diffHours >= 24 || d.getDate() !== now.getDate() ? `Ayer ${timeStr}` : `Hoy ${timeStr}`)
+        : `${dayStr} ${timeStr}`;
+
+      return { relative, dateStr };
     } catch {
-      return '--:--';
+      return { relative: '--', dateStr: String(isoString) };
     }
   };
 
@@ -170,6 +192,9 @@ export const CockpitDashboard: React.FC<CockpitDashboardProps> = ({
                     <span className="text-sm font-bold font-mono text-slate-100">
                       {totalRegistered.toLocaleString()} sismos
                     </span>
+                    <span className="text-[10px] text-slate-500 font-mono block">
+                      {feedRange === '24h' ? 'Escala: Últimas 24 horas' : feedRange === '7d' ? 'Escala: Últimos 7 días' : 'Escala: Últimos 30 días'}
+                    </span>
                   </div>
                 </div>
                 <div className="text-right">
@@ -215,10 +240,20 @@ export const CockpitDashboard: React.FC<CockpitDashboardProps> = ({
                             >
                               M {Number(ev.magnitude).toFixed(1)}
                             </span>
-                            <span className="text-[10px] font-mono text-slate-500 flex items-center gap-1">
-                              <Clock className="w-3 h-3 text-slate-500" />
-                              {formatEventTime(ev.event_time)}
-                            </span>
+                            {(() => {
+                              const timeInfo = formatEventTime(ev.event_time);
+                              return (
+                                <div className="text-right">
+                                  <span className="text-[10px] font-mono font-semibold text-sky-400 block leading-tight">
+                                    {timeInfo.relative}
+                                  </span>
+                                  <span className="text-[9px] font-mono text-slate-500 flex items-center gap-1 justify-end">
+                                    <Clock className="w-2.5 h-2.5 text-slate-500" />
+                                    {timeInfo.dateStr}
+                                  </span>
+                                </div>
+                              );
+                            })()}
                           </div>
 
                           <div className="text-xs font-semibold text-slate-200 line-clamp-1 mb-2">

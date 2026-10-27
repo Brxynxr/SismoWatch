@@ -19,25 +19,76 @@ export const ChartsView: React.FC<ChartsViewProps> = ({
   magnitudeStats,
   timeRangeLabel = '24h'
 }) => {
+  const getRangeMeta = () => {
+    switch (timeRangeLabel) {
+      case '24h':
+        return {
+          title: 'Actividad Sísmica por Hora (Últimas 24 Horas)',
+          metricUnit: 'Escala: Horas (UTC)',
+          subtitle: 'Eje X: Horas del día • Eje Y: Cantidad de sismos registrados en cada hora',
+          yAxisLabel: 'Sismos / hora'
+        };
+      case 'Semana':
+        return {
+          title: 'Actividad Sísmica Diaria (Últimos 7 Días)',
+          metricUnit: 'Escala: Días de la semana',
+          subtitle: 'Eje X: Días de la semana • Eje Y: Cantidad de sismos registrados por día',
+          yAxisLabel: 'Sismos / día'
+        };
+      case 'Mes':
+        return {
+          title: 'Actividad Sísmica Diaria (Últimos 30 Días)',
+          metricUnit: 'Escala: Días del mes',
+          subtitle: 'Eje X: Días calendario • Eje Y: Cantidad de sismos registrados por día',
+          yAxisLabel: 'Sismos / día'
+        };
+      case 'Año':
+        return {
+          title: 'Actividad Sísmica Mensual (Último Año)',
+          metricUnit: 'Escala: Meses del año',
+          subtitle: 'Eje X: Meses del año • Eje Y: Cantidad de sismos registrados por mes',
+          yAxisLabel: 'Sismos / mes'
+        };
+      default:
+        return {
+          title: `Actividad Sísmica Temporal (${timeRangeLabel})`,
+          metricUnit: 'Escala Temporal',
+          subtitle: 'Frecuencia temporal y picos observados en cada intervalo',
+          yAxisLabel: 'Sismos'
+        };
+    }
+  };
+
+  const meta = getRangeMeta();
+
   const formattedHourly = hourlyStats.map((h) => {
     try {
       const d = new Date(h.hour_bucket);
-      const isDateBucket = timeRangeLabel === 'Mes' || timeRangeLabel === 'Año' || timeRangeLabel === 'Semana';
-      const label = isDateBucket
-        ? d.toLocaleDateString([], { month: 'short', day: 'numeric' })
-        : d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      let axisLabel = '';
+      let tooltipTitle = '';
+
+      if (timeRangeLabel === '24h') {
+        axisLabel = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        tooltipTitle = `Hora: ${axisLabel} (${d.toLocaleDateString([], { day: 'numeric', month: 'short' })})`;
+      } else if (timeRangeLabel === 'Semana') {
+        axisLabel = d.toLocaleDateString([], { weekday: 'short', day: 'numeric' });
+        tooltipTitle = d.toLocaleDateString([], { weekday: 'long', day: 'numeric', month: 'long' });
+      } else if (timeRangeLabel === 'Mes') {
+        axisLabel = d.toLocaleDateString([], { day: 'numeric', month: 'short' });
+        tooltipTitle = d.toLocaleDateString([], { day: 'numeric', month: 'long', year: 'numeric' });
+      } else {
+        // Año
+        axisLabel = d.toLocaleDateString([], { month: 'short', year: '2-digit' });
+        tooltipTitle = d.toLocaleDateString([], { month: 'long', year: 'numeric' });
+      }
+
       return {
         ...h,
-        hour: label,
-        fullTimestamp: d.toLocaleString([], {
-          month: 'short',
-          day: 'numeric',
-          hour: '2-digit',
-          minute: '2-digit'
-        })
+        axisLabel,
+        fullTimestamp: tooltipTitle
       };
     } catch {
-      return { ...h, hour: String(h.hour_bucket), fullTimestamp: String(h.hour_bucket) };
+      return { ...h, axisLabel: String(h.hour_bucket), fullTimestamp: String(h.hour_bucket) };
     }
   });
 
@@ -45,8 +96,16 @@ export const ChartsView: React.FC<ChartsViewProps> = ({
     <div className="space-y-6">
       {/* 1. Actividad Sísmica Temporal (Full Width Hero Chart) */}
       <div className="p-5 rounded-2xl border border-slate-800 bg-slate-900/60 backdrop-blur shadow-sm">
-        <h3 className="text-sm font-semibold text-slate-300 mb-1">Actividad Sísmica Temporal ({timeRangeLabel})</h3>
-        <p className="text-xs text-slate-500 mb-4">Frecuencia temporal y picos observados en cada ventana</p>
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 mb-3">
+          <div>
+            <h3 className="text-sm font-semibold text-slate-200">{meta.title}</h3>
+            <p className="text-xs text-slate-400">{meta.subtitle}</p>
+          </div>
+          <span className="self-start sm:self-auto text-[10px] font-mono font-medium px-2 py-0.5 rounded bg-sky-500/10 border border-sky-500/30 text-sky-400">
+            {meta.metricUnit}
+          </span>
+        </div>
+
         <div className="h-64 w-full">
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={formattedHourly}>
@@ -57,12 +116,16 @@ export const ChartsView: React.FC<ChartsViewProps> = ({
                 </linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-              <XAxis dataKey="hour" stroke="#64748b" fontSize={11} />
+              <XAxis dataKey="axisLabel" stroke="#64748b" fontSize={11} />
               <YAxis stroke="#64748b" fontSize={11} allowDecimals={false} />
               <Tooltip
                 contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '8px' }}
-                labelStyle={{ color: '#94a3b8' }}
+                labelStyle={{ color: '#38bdf8', fontWeight: 600, marginBottom: '4px' }}
                 labelFormatter={(_, items) => items?.[0]?.payload?.fullTimestamp || ''}
+                formatter={(val: any, name: any, item: any) => [
+                  `${val} sismos (M máx: ${item?.payload?.max_magnitude ?? 'N/A'})`,
+                  meta.yAxisLabel
+                ]}
               />
               <Area
                 type="monotone"
@@ -80,12 +143,17 @@ export const ChartsView: React.FC<ChartsViewProps> = ({
 
       {/* 2. Distribución por Clase Sísmica (Card completa vertical debajo de actividad) */}
       <div className="p-5 rounded-2xl border border-slate-800 bg-slate-900/60 backdrop-blur shadow-sm">
-        <div className="flex items-center justify-between mb-1">
-          <h3 className="text-sm font-semibold text-slate-300">Distribución por Clase Sísmica ({timeRangeLabel})</h3>
-          <span className="text-[11px] font-mono text-slate-400">Total: {magnitudeStats.reduce((acc, m) => acc + (m.event_count || 0), 0)} sismos</span>
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 mb-1">
+          <div>
+            <h3 className="text-sm font-semibold text-slate-200">Distribución por Clase Sísmica ({timeRangeLabel})</h3>
+            <p className="text-xs text-slate-400">Clasificación estándar de magnitud USGS según energía liberada</p>
+          </div>
+          <span className="self-start sm:self-auto text-[10px] font-mono px-2 py-0.5 rounded bg-slate-800 border border-slate-700 text-slate-300">
+            Total en período: {magnitudeStats.reduce((acc, m) => acc + (m.event_count || 0), 0)} sismos
+          </span>
         </div>
-        <p className="text-xs text-slate-500 mb-4">Clasificación estándar USGS (Micro, Minor, Light, Moderate, Strong)</p>
-        <div className="h-64 w-full">
+
+        <div className="h-64 w-full my-3">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={magnitudeStats} layout="vertical">
               <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
@@ -94,7 +162,7 @@ export const ChartsView: React.FC<ChartsViewProps> = ({
               <Tooltip
                 contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '8px' }}
                 formatter={(val: any, name: any, item: any) => [
-                  `${val} eventos (${item?.payload?.percentage || 0}%)`,
+                  `${val} eventos (${item?.payload?.percentage || 0}% del período)`,
                   'Frecuencia'
                 ]}
               />
@@ -106,12 +174,43 @@ export const ChartsView: React.FC<ChartsViewProps> = ({
             </BarChart>
           </ResponsiveContainer>
         </div>
+
+        {/* Guía didáctica para que cualquier persona entienda */}
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 pt-3 border-t border-slate-800/80 text-[10px]">
+          <div className="bg-slate-950/60 p-2 rounded-lg border border-slate-800/60">
+            <span className="font-bold text-sky-400 block">Micro (&lt; 2.0)</span>
+            <span className="text-slate-400 leading-tight">Imperceptible</span>
+          </div>
+          <div className="bg-slate-950/60 p-2 rounded-lg border border-slate-800/60">
+            <span className="font-bold text-emerald-400 block">Minor (2.0 - 3.9)</span>
+            <span className="text-slate-400 leading-tight">Casi imperceptible</span>
+          </div>
+          <div className="bg-slate-950/60 p-2 rounded-lg border border-slate-800/60">
+            <span className="font-bold text-amber-400 block">Light (4.0 - 4.9)</span>
+            <span className="text-slate-400 leading-tight">Sentido ampliamente</span>
+          </div>
+          <div className="bg-slate-950/60 p-2 rounded-lg border border-slate-800/60">
+            <span className="font-bold text-orange-400 block">Moderate (5.0 - 5.9)</span>
+            <span className="text-slate-400 leading-tight">Daños menores</span>
+          </div>
+          <div className="bg-slate-950/60 p-2 rounded-lg border border-slate-800/60 col-span-2 sm:col-span-1">
+            <span className="font-bold text-rose-400 block">Strong+ (≥ 6.0)</span>
+            <span className="text-slate-400 leading-tight">Riesgo destructivo</span>
+          </div>
+        </div>
       </div>
 
       {/* 3. Top Regiones con Mayor Actividad Sísmica (Card completa vertical debajo) */}
       <div className="p-5 rounded-2xl border border-slate-800 bg-slate-900/60 backdrop-blur shadow-sm">
-        <h3 className="text-sm font-semibold text-slate-300 mb-1">Top Regiones con Mayor Actividad ({timeRangeLabel})</h3>
-        <p className="text-xs text-slate-500 mb-4">Zonas tectónicas con mayor acumulación de eventos en este período</p>
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 mb-2">
+          <div>
+            <h3 className="text-sm font-semibold text-slate-200">Top Regiones con Mayor Actividad ({timeRangeLabel})</h3>
+            <p className="text-xs text-slate-400">Zonas tectónicas con mayor acumulación de eventos en este período</p>
+          </div>
+          <span className="self-start sm:self-auto text-[10px] font-mono px-2 py-0.5 rounded bg-cyan-500/10 border border-cyan-500/30 text-cyan-400">
+            Medición: Sismos acumulados
+          </span>
+        </div>
         <div className="h-72 w-full">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={regionStats.slice(0, 7)} layout="vertical">

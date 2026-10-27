@@ -52,7 +52,12 @@ def get_hourly_stats(
 ):
     """Returns event count over time for the requested time range."""
     interval_val = INTERVAL_MAP.get(range, "24 hours")
-    date_trunc = "day" if range in ("7d", "30d", "1y") else "hour"
+    if range == "1y":
+        date_trunc = "month"
+    elif range in ("7d", "30d"):
+        date_trunc = "day"
+    else:
+        date_trunc = "hour"
     with get_api_reader_conn() as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute("""
