@@ -110,7 +110,7 @@ def save_staging_and_curated(
                 VALUES (%s, %s, %s, %s, %s);
             """
             quar_data = [
-                (q["raw_id"], q["event_id"], q["failed_rules"], q["rejection_reason"], Json(q["payload"]))
+                (q["raw_id"], q["event_id"], q["failed_rules"], q["rejection_reason"], Json(q["payload"], dumps=lambda o: json.dumps(o, default=str)))
                 for q in quarantined_records
             ]
             execute_batch(cur, sql_quar, quar_data, page_size=100)
