@@ -14,7 +14,7 @@ export const ChatAssistant: React.FC = () => {
   ]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
-  const [provider, setProvider] = useState<'local' | 'cloud'>('local');
+  const [provider, setProvider] = useState<'local' | 'cloud'>('cloud');
   const [expandedSqlId, setExpandedSqlId] = useState<string | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);

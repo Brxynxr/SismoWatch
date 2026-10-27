@@ -18,7 +18,7 @@ router = APIRouter(prefix="/api/chat", tags=["Agente Conversacional"])
 
 class ChatRequest(BaseModel):
     message: str
-    provider: Optional[str] = "local"  # "local" (Ollama) o "cloud" (Groq)
+    provider: Optional[str] = "cloud"  # "cloud" (Groq predeterminado) o "local" (Ollama)
 
 class ProofOfGrounding(BaseModel):
     verified: bool
