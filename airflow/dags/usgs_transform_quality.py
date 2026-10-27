@@ -96,11 +96,19 @@ def usgs_transformation_pipeline():
             raw_id_map=raw_id_map
         )
 
-        # 4. Save into Staging, Curated and Quality Runs
+        # 4. Save into Staging, Curated and Quality Runs (PostgreSQL Hot Tier)
         run_id = context.get("run_id", f"manual_{datetime.utcnow().isoformat()}")
         save_staging_and_curated(valid_records, quarantined_records, metrics, execution_id=run_id)
 
-        # 5. Emit OpenMetadata lineage manifest
+        # 5. Cold-tier export to MinIO Lakehouse (Silver & Gold Parquet, resilient non-blocking)
+        try:
+            from include.minio_exporter import export_silver_parquet, export_gold_parquet
+            export_silver_parquet(valid_records, quarantined_records)
+            export_gold_parquet(valid_records)
+        except Exception as minio_err:
+            logger.warning("MinIO Silver/Gold Parquet export failed (non-blocking fallback): %s", minio_err)
+
+        # 6. Emit OpenMetadata lineage manifest
         emit_lineage("usgs_transform_quality", str(datetime.utcnow()))
 
         logger.info("Successfully processed batch: %d valid published to Gold, %d quarantined.",

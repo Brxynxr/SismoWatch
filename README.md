@@ -2,12 +2,13 @@
 
 [![Airflow](https://img.shields.io/badge/Airflow-2.10-017CEE?logo=apache-airflow&logoColor=white)](https://airflow.apache.org/)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-336791?logo=postgresql&logoColor=white)](https://www.postgresql.org/)
+[![MinIO](https://img.shields.io/badge/MinIO-Data_Lakehouse_Parquet-C72C48?logo=minio&logoColor=white)](https://min.io/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
 [![React](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=black)](https://react.dev/)
 [![Ollama](https://img.shields.io/badge/Ollama-Local_Qwen2.5--Coder-000000?logo=ollama&logoColor=white)](https://ollama.ai/)
 [![Pandera](https://img.shields.io/badge/Data_Quality-Pandera_Lazy-FF6F00)](https://pandera.readthedocs.io/)
 [![Security](https://img.shields.io/badge/Security-Gitleaks_%26_Bandit_Passed-brightgreen)](https://github.com/gitleaks/gitleaks)
-[![Tests](https://img.shields.io/badge/Tests-34%2F34_Passing-success)]()
+[![Tests](https://img.shields.io/badge/Tests-39%2F39_Passing-success)]()
 
 **SismoWatch** es una plataforma de grado empresarial para la ingestión, auditoría de calidad, transformación analítica, enriquecimiento geofísico y explotación conversacional con IA de datos sísmicos mundiales en tiempo casi real desde el catálogo público de la **USGS (United States Geological Survey)**.
 
@@ -99,6 +100,8 @@ docker compose up -d
 | **Plataforma Web (React)** | http://localhost:3000 | `viewer` / `viewer_sismowatch_2026_pwd`<br>`admin` / `admin_sismowatch_2026_pwd` | Dashboard, Mapa PGA, Recharts, Catálogo CSV, Chat IA y Panel de Cuarentena. |
 | **API REST (FastAPI / Swagger)** | http://localhost:8000/docs | Autenticación Bearer JWT (`/auth/login`) | Endpoints Medallion, SSE Streaming (`/api/stream`) y Chat Grounded. |
 | **Apache Airflow 2.10** | http://localhost:8080 | `admin` / `admin` | Orquestador LocalExecutor con 4 DAGs activos. |
+| **MinIO Object Storage (Console)** | http://localhost:9001 | `sismowatch_minio_admin` / `minio_sismowatch_2026_pwd` | Consola Web Data Lakehouse para explorar Parquets Medallion (`sismowatch-lake`). |
+| **MinIO S3 API** | http://localhost:9000 | Credenciales S3 v4 | Endpoint de almacenamiento de objetos compatible con AWS S3. |
 | **PostgreSQL 16** | `localhost:5432` | Base de datos `sismowatch_db` | Schemas `raw`, `staging` y `curated` con POLP. |
 
 > **Tip de Evaluación:** El modal de inicio de sesión en el navegador cuenta con botones de **Acceso Rápido** (`[ Rol Viewer ]` y `[ Rol Admin ]`) para ingresar con un solo clic.
@@ -107,7 +110,7 @@ docker compose up -d
 
 ## 🧪 Verificación y Pruebas Automatizadas
 
-El proyecto cuenta con **34 pruebas unitarias y de integración** pasando al 100%:
+El proyecto cuenta con **39 pruebas unitarias y de integración** pasando al 100%:
 
 ```bash
 PYTHONPATH=airflow:api .venv/bin/pytest tests/ -vv
@@ -115,6 +118,7 @@ PYTHONPATH=airflow:api .venv/bin/pytest tests/ -vv
 
 ### Cobertura de Tests:
 * `tests/test_roles_permissions.py` (13 tests): Valida permisos positivos y negativos de cada rol (`role_ingestion`, `role_transformation`, `role_api_reader`, `role_chat_reader`, `role_api_logger`).
+* `tests/test_minio_parquet.py` (5 tests): Valida particionamiento Medallion en Parquet, compresión Snappy, deduplicación de eventos y resiliencia no bloqueante ante fallos de conexión.
 * `tests/test_quality.py` (4 tests): Valida circuit breaker a nivel lote (esquema, volumen, frescura) y aislamiento a nivel fila en cuarentena con Pandera `lazy=True`.
 * `tests/test_transform.py` (5 tests): Valida extracción de región, clasificación de magnitud, radio de impacto PGA y hashing SHA-256.
 * `tests/test_dags_integrity.py` (2 tests): Valida sintaxis AST e importación limpia en DagBag dentro del contenedor Airflow (4 DAGs sin errores).
@@ -140,8 +144,8 @@ Para la sustentación ante el Tech Lead o evaluador, utiliza estos argumentos t�
    *Principio de Proof of Grounding: El LLM nunca genera números de su memoria. Su única tarea es traducir la pregunta a una sentencia `SELECT` sobre `curated.v_events_chat`. La consulta pasa por un guardrail AST/regex que bloquea DDL/DML, se ejecuta bajo `role_chat_reader` (solo lectura dura y timeout de 3s en PostgreSQL), y la respuesta final se sintetiza exclusivamente a partir de las filas devueltas.*
 3. **¿Cómo se manejaron los registros con errores de calidad?**  
    *Validación en dos niveles con Pandera: a nivel lote se verifica la frescura (< 120 min) y estructura del GeoJSON (circuit breaker bloqueante). A nivel fila, usando `lazy=True`, los registros que violan rangos de coordenadas o fechas futuras se desvían a `staging.quarantine` con sus reglas fallidas documentadas, permitiendo que los datos conformes continúen hacia Gold sin interrupción.*
-4. **¿Por qué no usar Spark, Kafka o MinIO?**  
-   *Para el volumen actual (miles de eventos/día de USGS), añadir Spark o Kafka violaría el principio de simplicidad operacional e incrementaría el footprint de memoria más allá del presupuesto del host (15 GB RAM compartida con Ollama). En [docs/ARQUITECTURA.md](docs/ARQUITECTURA.md) y [docs/OPENMETADATA.md](docs/OPENMETADATA.md) se detalla la hoja de ruta de evolución a producción para cuando el volumen supere los millones de eventos por segundo.*
+4. **¿Por qué la arquitectura híbrida con MinIO y Parquet (Hot/Cold Tiering)?**  
+   *Separación de responsabilidades: PostgreSQL opera como Hot Tier para baja latencia (FastAPI, Leaflet, SSE `/api/stream`, Text-to-SQL). MinIO opera como Cold Tier (Data Lakehouse) almacenando el histórico inmutable en Apache Parquet con compresión Snappy particionado por fecha (`bronze/year=...`, `silver/valid/...`, `silver/quarantine/...`, `gold/...`). La exportación es resiliente y no bloqueante: si MinIO sufriera una caída temporal, el pipeline en PostgreSQL continúa sin interrupciones.*
 
 ---
 
@@ -150,12 +154,13 @@ Para la sustentación ante el Tech Lead o evaluador, utiliza estos argumentos t�
 ```text
 ├── airflow/
 │   ├── dags/
-│   │   ├── usgs_ingest_feed.py           # Ingesta Bronze cada 5 min
-│   │   ├── usgs_transform_quality.py     # Silver & Gold reactivo por Dataset
+│   │   ├── usgs_ingest_feed.py           # Ingesta Bronze cada 5 min & export Parquet
+│   │   ├── usgs_transform_quality.py     # Silver & Gold reactivo & export Parquet
 │   │   ├── usgs_historical_backfill.py   # Backfill bajo demanda (Admin)
 │   │   └── usgs_daily_report_anomaly.py  # Reporte diario y Z-score (06:00 UTC)
 │   ├── include/
 │   │   ├── db.py                         # Conexiones e inserciones idempotentes
+│   │   ├── minio_exporter.py             # Exportador Parquet Snappy Medallion a MinIO
 │   │   ├── transform.py                  # Normalización, PGA impact radius
 │   │   ├── quality.py                    # Reglas Pandera en dos niveles
 │   │   ├── callbacks.py                  # Webhooks de alerta

@@ -81,9 +81,17 @@ def usgs_ingest_pipeline():
             else:
                 raise RuntimeError(f"USGS API failed and backup fixture not found: {err}")
 
-        # Ingestion into Bronze layer (append-only)
+        # Ingestion into Bronze layer (PostgreSQL Hot Tier, append-only)
         inserted_count = insert_raw_events(events, source_feed=source_feed)
-        logger.info("Ingestion completed: %d raw events processed.", inserted_count)
+        logger.info("Ingestion completed: %d raw events processed in PostgreSQL.", inserted_count)
+
+        # Asynchronous/Resilient Parquet export to MinIO Lakehouse (Cold Tier)
+        try:
+            from include.minio_exporter import export_bronze_parquet
+            export_bronze_parquet(events, source_feed=source_feed)
+        except Exception as minio_err:
+            logger.warning("MinIO Bronze export failed (non-blocking fallback): %s", minio_err)
+
         return inserted_count
 
     fetch_and_store_usgs_feed()

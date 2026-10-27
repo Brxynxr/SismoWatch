@@ -23,6 +23,10 @@ x-airflow-common: &airflow-common
     FAILURE_ALERT_WEBHOOK_URL: ${FAILURE_ALERT_WEBHOOK_URL:-https://httpbin.org/post}
     OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
     OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2.5-coder:1.5b}
+    MINIO_ENDPOINT: ${MINIO_ENDPOINT:-minio:9000}
+    MINIO_ROOT_USER: ${MINIO_ROOT_USER:-sismowatch_minio_admin}
+    MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minio_sismowatch_2026_pwd}
+    MINIO_BUCKET: ${MINIO_BUCKET:-sismowatch-lake}
     PYTHONPATH: /opt/airflow
   volumes:
     - ./airflow/dags:/opt/airflow/dags
@@ -187,6 +191,56 @@ services:
       - sismowatch-net
 
   # ----------------------------------------------------------------------------
+  # MinIO Object Storage (Data Lakehouse - Cold Tier Parquet)
+  # ----------------------------------------------------------------------------
+  minio:
+    image: minio/minio:latest
+    container_name: sismowatch-minio
+    restart: unless-stopped
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-sismowatch_minio_admin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minio_sismowatch_2026_pwd}
+      MINIO_BROWSER: "on"
+      MINIO_DEFAULT_BUCKETS: ${MINIO_BUCKET:-sismowatch-lake}
+    ports:
+      - "${MINIO_PORT:-9000}:9000"
+      - "${MINIO_CONSOLE_PORT:-9001}:9001"
+    volumes:
+      - minio_data:/bitnami/minio/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9000/minio/health/live || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    networks:
+      - sismowatch-net
+
+  minio_setup:
+    image: minio/mc:latest
+    container_name: sismowatch-minio-setup
+    depends_on:
+      minio:
+        condition: service_healthy
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-sismowatch_minio_admin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minio_sismowatch_2026_pwd}
+      MINIO_BUCKET: ${MINIO_BUCKET:-sismowatch-lake}
+    entrypoint: >
+      /bin/sh -c "
+      until (/opt/bitnami/minio-client/bin/mc alias set myminio http://minio:9000 $${MINIO_ROOT_USER} $${MINIO_ROOT_PASSWORD}); do
+        echo 'Esperando que MinIO este listo...';
+        sleep 1;
+      done;
+      /opt/bitnami/minio-client/bin/mc mb --ignore-existing myminio/$${MINIO_BUCKET};
+      echo 'Bucket $${MINIO_BUCKET} listo en MinIO.';
+      exit 0;
+      "
+    restart: "no"
+    networks:
+      - sismowatch-net
+
+  # ----------------------------------------------------------------------------
   # Ollama (Servicio Opcional para entornos sin Ollama en Host)
   # ----------------------------------------------------------------------------
   ollama:
@@ -206,6 +260,8 @@ volumes:
     name: sismowatch_postgres_data
   ollama_data:
     name: sismowatch_ollama_data
+  minio_data:
+    name: sismowatch_minio_data
 
 networks:
   sismowatch-net:

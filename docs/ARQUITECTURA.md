@@ -10,13 +10,11 @@ La arquitectura de **SismoWatch** resuelve la necesidad crítica de transformar 
 
 ---
 
-## 2. Decisión de Arquitectura: Patrón Medallion (Bronze - Silver - Gold)
+## 2. Decisión de Arquitectura: Patrón Medallion y Data Lakehouse Híbrido (Hot/Cold Tiering)
 
-Se seleccionó el patrón **Medallion Architecture (Multi-Hop)** sobre arquitecturas alternativas como Lambda o Kappa por tres razones fundamentales:
-
-1. **Evolución Asíncrona de los Datos:** Un evento sísmico publicado por USGS no es inmutable en el tiempo. Minutos o días después, los sismólogos refinan la magnitud preliminar, corrigen la profundidad o actualizan el estado de `automatic` a `reviewed`. Medallion permite almacenar cada versión en Bronze (append-only) y mantener en Gold la última versión oficial consolidada mediante **upsert condicional** (`UPDATE` solo si `EXCLUDED.updated_time > curated.earthquakes.updated_time`).
-2. **Eliminación de la Complejidad Operativa (Anti-Sobreingeniería):** Lambda requiere paralelizar dos canales (Batch y Speed) con motores pesados (Kafka/Flink y Spark) que duplican la lógica de negocio. En SismoWatch, micro-lotes de 5 minutos sobre PostgreSQL satisfacen la latencia requerida con una sola base de datos y un solo orquestador.
-3. **Gobierno y Cuarentena:** Silver aísla datos limpios y envía registros anómalos a cuarentena sin frenar el flujo de datos sanos.
+Se implementa una arquitectura híbrida **Medallion Lakehouse** combinando dos niveles de almacenamiento:
+1. **Hot Tier (OLTP Transaccional - PostgreSQL 16):** Responde a las consultas de baja latencia del frontend web, streaming SSE en `/api/stream`, mapa interactivo con Leaflet y ejecución Text-to-SQL del asistente de IA.
+2. **Cold Tier (Data Lakehouse - MinIO S3 + Apache Parquet):** Almacenamiento histórico inmutable particionado por fecha con compresión columnar `snappy`, habilitando archivado a largo plazo, compatibilidad analítica masiva (DuckDB/Spark/Trino) y desacoplamiento de cómputo.
 
 ```
        [ USGS Public API ]
@@ -27,34 +25,31 @@ Se seleccionó el patrón **Medallion Architecture (Multi-Hop)** sobre arquitect
    +-----------+-----------+
                |
     ===========|======================================================
-    CAPA 1: BRONZE (raw.usgs_events)
-    - Almacena el GeoJSON tal como llega (JSONB completo).
-    - Append-only: INSERT ... ON CONFLICT (event_id, payload_hash) DO NOTHING.
-    - Cero mutaciones. Auditoría histórica completa.
+    CAPA 1: BRONZE (raw.usgs_events & MinIO Parquet)
+    - Hot: PostgreSQL raw.usgs_events (JSONB inmutable, append-only).
+    - Cold: s3://sismowatch-lake/bronze/year=YYYY/month=MM/day=DD/raw_events.parquet (snappy).
     ==================================================================
                |
                v [Validación Pandera (lazy=True)]
     ===========|======================================================
-    CAPA 2: SILVER (staging)
-    - staging.events: Normalización y tipado fuerte (1 fila por evento).
-    - staging.quarantine: Filas inválidas con motivo y regla fallida.
+    CAPA 2: SILVER (staging & MinIO Parquet)
+    - Hot: staging.events (limpios) & staging.quarantine (rechazos).
+    - Cold: s3://sismowatch-lake/silver/valid/year=YYYY/month=MM/events_clean.parquet
+    - Cold: s3://sismowatch-lake/silver/quarantine/year=YYYY/month=MM/quarantined.parquet
     ==================================================================
                |
                v [Upsert condicional + Enriquecimiento]
     ===========|======================================================
-    CAPA 3: GOLD (curated)
-    - curated.earthquakes: Estado actual con 'region' y 'magnitude_class'.
-    - curated.quality_runs: Métricas de calidad por lote y frescura.
-    - curated.ai_reports: Resúmenes ejecutivos diarios.
-    - curated.anomalies: Enjambres y picos detectados (Z-score).
-    - curated.ai_runs: Registro unificado de ejecuciones LLM.
+    CAPA 3: GOLD (curated & MinIO Parquet)
+    - Hot: curated.earthquakes (region, impact_radius_km, magnitude_class).
+    - Cold: s3://sismowatch-lake/gold/year=YYYY/month=MM/earthquakes_curated.parquet
     - Vistas: v_kpis_24h, v_hourly_counts, v_region_activity,
               v_magnitude_distribution, v_quarantine, v_events_chat.
     ==================================================================
          ^                           ^
          | (role_api_reader)         | (role_chat_reader: read-only, timeout 3s)
     +----+------------------+   +----+------------------+
-    |   FastAPI Backend     |   |   Agente Chat Local   | (Ollama Phi-3)
+    |   FastAPI Backend     |   |   Agente Chat Local   | (Ollama qwen2.5-coder)
     +-----------+-----------+   +-----------+-----------+
                 \                           /
                  v                         v
@@ -102,19 +97,37 @@ El sistema implementa una arquitectura de streaming transparente:
 
 ---
 
-## 6. Evolución a Producción y Criterios de Escala (Ecosistema Apache)
+## 6. Arquitectura Híbrida Hot/Cold Tiering y Data Lakehouse (MinIO + Parquet)
 
-En la fase actual de **SismoWatch**, introducir componentes como Apache Spark, MinIO o Apache Atlas constituiría **sobreingeniería injustificada** (añadiría más de 3 contenedores adicionales, 4 GB de RAM extra y múltiples puntos únicos de fallo que pondrían en riesgo la estabilidad del comando único `docker compose up -d`).
+SismoWatch implementa una arquitectura híbrida de almacenamiento dividida en dos capas:
 
-Actualmente, el linaje y gobierno de datos están garantizados de forma nativa por los **Airflow Datasets (Inlets y Outlets)**, permitiendo que la transformación reaccione automáticamente a la actualización de la capa Bronze (`raw.usgs_events`).
+### 1. Hot Tier (PostgreSQL 16)
+* **Objetivo:** Explotación analítica y transaccional en tiempo real.
+* **Consumidores:** FastAPI (`/api/events`, `/api/kpis`, `/api/reports`), SSE Stream en `/api/stream`, mapa interactivo Leaflet y asistente conversacional Text-to-SQL.
+* **Garantías:** Integridad relacional, llaves foráneas, índices B-Tree y GiST, aislamiento por roles de base de datos (POLP).
 
-Sin embargo, para una evolución hacia un producto de datos global de escala petabyte, se definen los siguientes criterios concretos para su incorporación:
+### 2. Cold Tier (MinIO Object Storage + Apache Parquet)
+* **Objetivo:** Archivo histórico inmutable, optimizado para escaneos masivos OLAP y consultas federadas.
+* **Formato:** Apache Parquet columnar con compresión `snappy`.
+* **Esquema de Particionamiento Medallion en bucket `sismowatch-lake`:**
+  * **Bronze:** `bronze/year=YYYY/month=MM/day=DD/raw_events.parquet`
+  * **Silver Válidos:** `silver/valid/year=YYYY/month=MM/events_clean.parquet`
+  * **Silver Cuarentena:** `silver/quarantine/year=YYYY/month=MM/quarantined.parquet`
+  * **Gold Curados:** `gold/year=YYYY/month=MM/earthquakes_curated.parquet`
+* **Resiliencia:** La exportación a MinIO está desacoplada del pipeline de base de datos mediante un patrón no bloqueante (`try/except` con log de advertencia), asegurando que cualquier indisponibilidad transitoria del servicio de almacenamiento de objetos jamás detenga la operación crítica en PostgreSQL.
+* **Consola de Administración:** Accesible en `http://localhost:9001` con las credenciales de entorno `MINIO_ROOT_USER` y `MINIO_ROOT_PASSWORD`.
+
+---
+
+## 7. Evolución a Producción y Criterios de Escala (Ecosistema Apache)
+
+Para una evolución hacia un producto de datos global de escala petabyte, se definen los siguientes criterios concretos para la incorporación de componentes adicionales:
 
 | Componente | ¿Cuándo incorporarlo? (Criterio de Escala) | ¿Por qué y qué problema resuelve? |
 | :--- | :--- | :--- |
 | **Apache Spark** | Cuando el volumen supere **100 GB/día** o se integren redes de sensores sísmicos IoT de alta frecuencia (miles de lecturas por segundo) que desborden la memoria/CPU de un único nodo PostgreSQL. | Permite procesamiento paralelo distribuido en clúster (RDDs y Spark DataFrames) para agregaciones geoespaciales complejas y cálculo de matrices de covarianza a escala sin estrangular la base de datos relacional. |
-| **Object Storage (S3 / MinIO)** | Cuando el historial acumulado supere **500 GB** o se requiera desacoplar almacenamiento de cómputo para auditoría regulatoria de largo plazo. | Permite archivar la capa Bronze en formato columnar comprimido (**Apache Parquet con compresión Snappy/ZSTD**), reduciendo costos de almacenamiento en un 80% y habilitando consultas federadas mediante Trino o Athena sin impactar el disco local. |
-| **Catálogo de Linaje (Atlas / OpenMetadata)** | Cuando la organización crezca a **más de 15 pipelines interdependientes** y múltiples equipos interdisciplinarios (Data Engineering, Data Science, Compliance) consuman y publiquen datos. | Centraliza la gobernanza empresarial, catálogo de términos de negocio, control de linaje automatizado columna por columna (column-level lineage) y auditoría de accesos PII/sensibles en una plataforma corporativa unificada. |
+| **Motor de Consulta Federada (Trino / DuckDB)** | Cuando múltiples analistas requieran consultar directamente el Cold Tier en MinIO Parquet sin pasar por PostgreSQL. | Permite ejecutar consultas SQL estándar directamente sobre el lago de datos Parquet particionado en MinIO con latencias de segundos. |
+| **Catálogo de Linaje Empresarial (Atlas / OpenMetadata)** | Cuando la organización crezca a **más de 15 pipelines interdependientes** y múltiples equipos interdisciplinarios (Data Engineering, Data Science, Compliance) consuman y publiquen datos. | Centraliza la gobernanza empresarial, catálogo de términos de negocio, control de linaje automatizado columna por columna (column-level lineage) y auditoría de accesos PII/sensibles en una plataforma corporativa unificada. |
 
 
 ---

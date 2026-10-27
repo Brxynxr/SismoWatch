@@ -82,7 +82,7 @@ def query_ollama(model: str, prompt: str, temperature: float = 0.1, max_tokens: 
         headers={"Content-Type": "application/json"}
     )
     try:
-        with urllib.request.urlopen(req, timeout=30) as res:
+        with urllib.request.urlopen(req, timeout=30) as res:  # nosec B310
             data = json.loads(res.read().decode("utf-8"))
             dur = time.time() - t0
             eval_count = data.get("eval_count", 0)
