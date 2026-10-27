@@ -25,7 +25,7 @@ US_STATE_CODES = {
 
 def compute_payload_hash(payload: Any) -> str:
     """Calculates SHA-256 hash of a canonical JSON payload for idempotency."""
-    canonical = json.dumps(payload, sort_keys=True, separators=(',', ':'))
+    canonical = json.dumps(payload, sort_keys=True, separators=(',', ':'), default=str)
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 def extract_region_from_place(place: Optional[str]) -> str:
@@ -131,12 +131,26 @@ def parse_geojson_feature(feature: Dict[str, Any]) -> Dict[str, Any]:
     coords = geom.get("coordinates") or []
 
     event_id = str(feature.get("id") or "").strip()
-    raw_mag = props.get("mag")
-    mag = float(raw_mag) if raw_mag is not None else None
+    try:
+        raw_mag = props.get("mag")
+        mag = float(raw_mag) if raw_mag is not None else None
+    except (ValueError, TypeError):
+        mag = None
 
-    depth = float(coords[2]) if len(coords) > 2 and coords[2] is not None else 10.0
-    lon = float(coords[0]) if len(coords) > 0 and coords[0] is not None else None
-    lat = float(coords[1]) if len(coords) > 1 and coords[1] is not None else None
+    try:
+        depth = float(coords[2]) if len(coords) > 2 and coords[2] is not None else 10.0
+    except (ValueError, TypeError):
+        depth = 10.0
+
+    try:
+        lon = float(coords[0]) if len(coords) > 0 and coords[0] is not None else None
+    except (ValueError, TypeError):
+        lon = None
+
+    try:
+        lat = float(coords[1]) if len(coords) > 1 and coords[1] is not None else None
+    except (ValueError, TypeError):
+        lat = None
 
     place = str(props.get("place") or "").strip()
     region = extract_region_from_place(place)

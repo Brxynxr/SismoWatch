@@ -4,19 +4,20 @@ import { KPIs } from '../types';
 
 interface KPICardsProps {
   kpis: KPIs | null;
+  timeRangeLabel?: string;
 }
 
-export const KPICards: React.FC<KPICardsProps> = ({ kpis }) => {
+export const KPICards: React.FC<KPICardsProps> = ({ kpis, timeRangeLabel = '24h' }) => {
   const cards = [
     {
-      title: 'Total Sismos (24h)',
+      title: `Total Sismos (${timeRangeLabel})`,
       value: kpis?.total_events_24h ?? '--',
       subtitle: `${kpis?.reviewed_events_24h ?? 0} revisados por sismólogo`,
       icon: Activity,
       color: 'from-sky-500/20 to-blue-600/10 border-sky-500/30 text-sky-400'
     },
     {
-      title: 'Magnitud Máxima (24h)',
+      title: `Magnitud Máxima (${timeRangeLabel})`,
       value: kpis?.max_magnitude_24h ? Number(kpis.max_magnitude_24h).toFixed(2) : '--',
       subtitle: Number(kpis?.max_magnitude_24h || 0) >= 4.5 ? 'Atención Requerida' : 'Rango Normal',
       icon: Flame,

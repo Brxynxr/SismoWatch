@@ -1,8 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { SeismicGlobe3D } from './SeismicGlobe3D';
-import { KPICards } from './KPICards';
-import { ChartsView } from './ChartsView';
 import { EarthquakeEvent, KPIs, HourlyStat, RegionStat, MagnitudeStat } from '../types';
+import { api } from '../services/api';
 import {
   Activity,
   BarChart3,
@@ -15,7 +14,8 @@ import {
   Waves,
   MapPin,
   Clock,
-  AlertTriangle
+  AlertTriangle,
+  RefreshCw
 } from 'lucide-react';
 
 interface CockpitDashboardProps {
@@ -24,8 +24,6 @@ interface CockpitDashboardProps {
   hourlyStats: HourlyStat[];
   regionStats: RegionStat[];
   magnitudeStats: MagnitudeStat[];
-  timeRange?: string;
-  onTimeRangeChange?: (range: string) => void;
 }
 
 export const CockpitDashboard: React.FC<CockpitDashboardProps> = ({
@@ -34,11 +32,34 @@ export const CockpitDashboard: React.FC<CockpitDashboardProps> = ({
   hourlyStats,
   regionStats,
   magnitudeStats,
-  timeRange = '24h',
-  onTimeRangeChange,
 }) => {
   const [selectedEvent, setSelectedEvent] = useState<EarthquakeEvent | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(true);
+  const [feedEvents, setFeedEvents] = useState<EarthquakeEvent[]>(events);
+  const [feedRange, setFeedRange] = useState<string>('24h');
+  const [isUpdating, setIsUpdating] = useState<boolean>(false);
+
+  // Sync when initial events prop updates (e.g. from SSE or initial fetch)
+  useEffect(() => {
+    if (feedRange === '24h') {
+      setFeedEvents(events);
+    }
+  }, [events, feedRange]);
+
+  const handleFeedRangeChange = async (newRange: string) => {
+    setFeedRange(newRange);
+    setIsUpdating(true);
+    try {
+      const data = await api.getEvents({ time_range: newRange, page_size: 100 });
+      if (data && data.items) {
+        setFeedEvents(data.items);
+      }
+    } catch (err) {
+      console.error("Error loading feed for range:", err);
+    } finally {
+      setIsUpdating(false);
+    }
+  };
 
   const getMarkerColor = (mag: number): string => {
     if (mag >= 5.0) return 'text-rose-400 bg-rose-500/10 border-rose-500/30';
@@ -62,7 +83,7 @@ export const CockpitDashboard: React.FC<CockpitDashboardProps> = ({
       {/* 3D WebGL Globe Viewport (Dominant Center/Left) */}
       <div className="relative flex-1 h-full overflow-hidden">
         <SeismicGlobe3D
-          events={events}
+          events={feedEvents}
           selectedEvent={selectedEvent}
           onSelectEvent={(ev) => setSelectedEvent(ev)}
         />
@@ -91,13 +112,18 @@ export const CockpitDashboard: React.FC<CockpitDashboardProps> = ({
             <div className="p-3.5 border-b border-slate-800/80 flex flex-col gap-3">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></div>
-                  <h3 className="text-xs font-bold uppercase tracking-wider text-slate-300">
+                  <div
+                    className={`w-2 h-2 rounded-full ${
+                      isUpdating ? 'bg-amber-400 animate-ping' : 'bg-emerald-400 animate-pulse'
+                    }`}
+                  ></div>
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-slate-300 flex items-center gap-2">
                     Consola de Telemetría
+                    {isUpdating && <RefreshCw className="w-3 h-3 text-sky-400 animate-spin" />}
                   </h3>
                 </div>
                 <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-slate-900 border border-slate-800 text-sky-400 font-semibold">
-                  {events.length} Sismos en Red
+                  {feedEvents.length} Sismos en Red
                 </span>
               </div>
 
@@ -111,9 +137,10 @@ export const CockpitDashboard: React.FC<CockpitDashboardProps> = ({
                 ].map((item) => (
                   <button
                     key={item.id}
-                    onClick={() => onTimeRangeChange && onTimeRangeChange(item.id)}
+                    disabled={isUpdating}
+                    onClick={() => handleFeedRangeChange(item.id)}
                     className={`py-1.5 rounded-md font-medium text-center transition-all cursor-pointer ${
-                      timeRange === item.id
+                      feedRange === item.id
                         ? 'bg-sky-500/20 text-sky-300 border border-sky-500/40 font-semibold shadow-sm'
                         : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
                     }`}
@@ -129,15 +156,20 @@ export const CockpitDashboard: React.FC<CockpitDashboardProps> = ({
               <div className="space-y-2.5">
                 <div className="flex items-center justify-between text-[11px] text-slate-400 px-1">
                   <span>Haz clic en un evento para enfocar la cámara 3D</span>
-                  <span className="text-[10px] text-slate-500 font-mono">Filtro: {timeRange}</span>
+                  <span className="text-[10px] text-slate-500 font-mono">Filtro: {feedRange}</span>
                 </div>
 
-                {events.length === 0 ? (
+                {isUpdating ? (
+                  <div className="flex flex-col items-center justify-center py-16 gap-3 text-slate-400">
+                    <RefreshCw className="w-6 h-6 text-sky-400 animate-spin" />
+                    <span className="text-xs font-mono">Actualizando telemetría sísmica ({feedRange})...</span>
+                  </div>
+                ) : feedEvents.length === 0 ? (
                   <div className="text-center py-12 text-slate-500 text-xs">
                     No hay sismos reportados en el feed para este rango de tiempo
                   </div>
                 ) : (
-                  events.map((ev) => {
+                  feedEvents.map((ev) => {
                     const isSelected = selectedEvent?.event_id === ev.event_id;
                     const badgeClasses = getMarkerColor(ev.magnitude);
 

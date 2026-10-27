@@ -8,6 +8,7 @@ interface ChartsViewProps {
   hourlyStats: HourlyStat[];
   regionStats: RegionStat[];
   magnitudeStats: MagnitudeStat[];
+  timeRangeLabel?: string;
 }
 
 const COLORS = ['#38bdf8', '#34d399', '#fbbf24', '#f97316', '#f43f5e', '#a855f7'];
@@ -15,18 +16,27 @@ const COLORS = ['#38bdf8', '#34d399', '#fbbf24', '#f97316', '#f43f5e', '#a855f7'
 export const ChartsView: React.FC<ChartsViewProps> = ({
   hourlyStats,
   regionStats,
-  magnitudeStats
+  magnitudeStats,
+  timeRangeLabel = '24h'
 }) => {
-  const formattedHourly = hourlyStats.map((h) => ({
-    ...h,
-    hour: new Date(h.hour_bucket).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-  }));
+  const formattedHourly = hourlyStats.map((h) => {
+    try {
+      const d = new Date(h.hour_bucket);
+      const isDateBucket = timeRangeLabel === 'Mes' || timeRangeLabel === 'Año';
+      const label = isDateBucket
+        ? d.toLocaleDateString([], { month: 'short', day: 'numeric' })
+        : d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      return { ...h, hour: label };
+    } catch {
+      return { ...h, hour: String(h.hour_bucket) };
+    }
+  });
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-      {/* 24h Hourly Trend */}
+      {/* Time-Series Trend */}
       <div className="lg:col-span-2 p-5 rounded-xl border border-slate-800 bg-slate-900/60 backdrop-blur shadow-sm">
-        <h3 className="text-sm font-semibold text-slate-300 mb-1">Actividad Sísmica por Hora (Últimas 24h)</h3>
+        <h3 className="text-sm font-semibold text-slate-300 mb-1">Actividad Sísmica Temporal ({timeRangeLabel})</h3>
         <p className="text-xs text-slate-500 mb-4">Frecuencia temporal y magnitud máxima observada en cada ventana</p>
         <div className="h-64 w-full">
           <ResponsiveContainer width="100%" height="100%">

@@ -92,3 +92,20 @@ def test_validate_rows_and_quarantine():
     assert metrics["total_passed"] == 1
     assert metrics["total_quarantined"] == 3
     assert metrics["quality_score"] == 25.0
+
+def test_quarantine_payload_datetime_serialization():
+    """Verifies that quarantined payload with datetime and date objects serializes cleanly to JSONB."""
+    import json
+    from psycopg2.extras import Json
+    now_utc = datetime.now(timezone.utc)
+    rec = {
+        "event_id": "test_dt",
+        "event_time": now_utc,
+        "updated_time": now_utc,
+        "nested": {"date": now_utc.date()}
+    }
+    # Must NOT raise TypeError: Object of type datetime is not JSON serializable
+    adapted = Json(rec, dumps=lambda o: json.dumps(o, default=str))
+    serialized = adapted.dumps(adapted.adapted)
+    assert "test_dt" in serialized
+    assert now_utc.isoformat()[:10] in serialized

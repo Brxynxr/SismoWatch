@@ -122,7 +122,7 @@ def _write_or_append_parquet(
     for col in combined_df.columns:
         if combined_df[col].dtype == "object":
             combined_df[col] = combined_df[col].apply(
-                lambda val: json.dumps(val) if isinstance(val, (dict, list)) else (str(val) if pd.notnull(val) else None)
+                lambda val: json.dumps(val, default=str) if isinstance(val, (dict, list)) else (str(val) if pd.notnull(val) else None)
             )
 
     # Convert to PyArrow Table and write Snappy Parquet
@@ -171,7 +171,7 @@ def export_bronze_parquet(
                     continue
                 # If item is raw GeoJSON feature
                 if "properties" in item and "id" in item:
-                    payload_json = json.dumps(item, sort_keys=True)
+                    payload_json = json.dumps(item, sort_keys=True, default=str)
                     payload_hash = hashlib.sha256(payload_json.encode()).hexdigest()
                     rows.append({
                         "event_id": item["id"],

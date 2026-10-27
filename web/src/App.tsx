@@ -10,7 +10,7 @@ import { FloatingChatAssistant } from './components/FloatingChatAssistant';
 import { LoginModal } from './components/LoginModal';
 import { User, KPIs, EarthquakeEvent, HourlyStat, RegionStat, MagnitudeStat } from './types';
 import { api, getStoredUser, setStoredUser } from './services/api';
-import { Database, FileText, AlertTriangle, X, BarChart3 } from 'lucide-react';
+import { Database, FileText, AlertTriangle, X, BarChart3, RefreshCw } from 'lucide-react';
 
 export const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(getStoredUser());
@@ -24,30 +24,34 @@ export const App: React.FC = () => {
   const [regionStats, setRegionStats] = useState<RegionStat[]>([]);
   const [magnitudeStats, setMagnitudeStats] = useState<MagnitudeStat[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
-  const [timeRange, setTimeRange] = useState<string>('24h');
 
-  const handleTimeRangeChange = async (range: string) => {
-    setTimeRange(range);
+  // Dedicated independent Analytics state
+  const [analyticsRange, setAnalyticsRange] = useState<string>('24h');
+  const [analyticsLoading, setAnalyticsLoading] = useState<boolean>(false);
+  const [analyticsKPIs, setAnalyticsKPIs] = useState<KPIs | null>(null);
+  const [analyticsHourly, setAnalyticsHourly] = useState<HourlyStat[]>([]);
+  const [analyticsRegions, setAnalyticsRegions] = useState<RegionStat[]>([]);
+  const [analyticsMagnitudes, setAnalyticsMagnitudes] = useState<MagnitudeStat[]>([]);
+
+  const handleAnalyticsRangeChange = async (range: string) => {
+    setAnalyticsRange(range);
     if (!user) return;
-    setLoading(true);
+    setAnalyticsLoading(true);
     try {
-      const [kpisData, eventsData, hourlyData, regionsData, magsData] = await Promise.all([
+      const [kpisData, hourlyData, regionsData, magsData] = await Promise.all([
         api.getKPIs(range).catch(() => null),
-        api.getEvents({ page_size: 40, time_range: range }).catch(() => ({ items: [] })),
         api.getHourlyStats(range).catch(() => []),
         api.getRegionStats(range).catch(() => []),
         api.getMagnitudeDistribution(range).catch(() => [])
       ]);
-
-      if (kpisData) setKpis(kpisData);
-      if (eventsData?.items) setEvents(eventsData.items);
-      setHourlyStats(hourlyData);
-      setRegionStats(regionsData);
-      setMagnitudeStats(magsData);
+      if (kpisData) setAnalyticsKPIs(kpisData);
+      setAnalyticsHourly(hourlyData);
+      setAnalyticsRegions(regionsData);
+      setAnalyticsMagnitudes(magsData);
     } catch (err) {
-      console.error("Error updating range:", err);
+      console.error("Error loading analytics data:", err);
     } finally {
-      setLoading(false);
+      setAnalyticsLoading(false);
     }
   };
 
@@ -57,17 +61,23 @@ export const App: React.FC = () => {
     try {
       const [kpisData, eventsData, hourlyData, regionsData, magsData] = await Promise.all([
         api.getKPIs('24h').catch(() => null),
-        api.getEvents({ page_size: 35, time_range: '24h' }).catch(() => ({ items: [] })),
+        api.getEvents({ page_size: 40, time_range: '24h' }).catch(() => ({ items: [] })),
         api.getHourlyStats('24h').catch(() => []),
         api.getRegionStats('24h').catch(() => []),
         api.getMagnitudeDistribution('24h').catch(() => [])
       ]);
 
-      if (kpisData) setKpis(kpisData);
+      if (kpisData) {
+        setKpis(kpisData);
+        setAnalyticsKPIs(kpisData);
+      }
       if (eventsData?.items) setEvents(eventsData.items);
       setHourlyStats(hourlyData);
+      setAnalyticsHourly(hourlyData);
       setRegionStats(regionsData);
+      setAnalyticsRegions(regionsData);
       setMagnitudeStats(magsData);
+      setAnalyticsMagnitudes(magsData);
     } catch (err) {
       console.error("Error loading dashboard data:", err);
     } finally {
@@ -194,7 +204,10 @@ export const App: React.FC = () => {
               <div className="space-y-5">
                 {/* Time Range Selector for Analytics */}
                 <div className="flex items-center justify-between bg-slate-900/90 p-2.5 rounded-xl border border-slate-800">
-                  <span className="text-xs font-semibold text-slate-300 px-1">Rango de Análisis:</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-semibold text-slate-300 px-1">Rango de Análisis:</span>
+                    {analyticsLoading && <RefreshCw className="w-3.5 h-3.5 text-cyan-400 animate-spin" />}
+                  </div>
                   <div className="flex items-center gap-1.5">
                     {[
                       { id: '24h', label: '24 Horas' },
@@ -204,9 +217,10 @@ export const App: React.FC = () => {
                     ].map((item) => (
                       <button
                         key={item.id}
-                        onClick={() => handleTimeRangeChange(item.id)}
+                        disabled={analyticsLoading}
+                        onClick={() => handleAnalyticsRangeChange(item.id)}
                         className={`px-3 py-1 rounded-lg text-xs font-medium transition-all cursor-pointer ${
-                          timeRange === item.id
+                          analyticsRange === item.id
                             ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 font-bold shadow-sm'
                             : 'text-slate-400 hover:text-white hover:bg-slate-800/80'
                         }`}
@@ -217,12 +231,41 @@ export const App: React.FC = () => {
                   </div>
                 </div>
 
-                <KPICards kpis={kpis} />
-                <ChartsView
-                  hourlyStats={hourlyStats}
-                  regionStats={regionStats}
-                  magnitudeStats={magnitudeStats}
-                />
+                {analyticsLoading ? (
+                  <div className="flex flex-col items-center justify-center py-24 gap-3 text-slate-400">
+                    <RefreshCw className="w-7 h-7 text-cyan-400 animate-spin" />
+                    <span className="text-xs font-mono">Calculando métricas y distribución ({analyticsRange})...</span>
+                  </div>
+                ) : (
+                  <>
+                    <KPICards
+                      kpis={analyticsKPIs || kpis}
+                      timeRangeLabel={
+                        analyticsRange === '24h'
+                          ? '24h'
+                          : analyticsRange === '7d'
+                          ? 'Semana'
+                          : analyticsRange === '30d'
+                          ? 'Mes'
+                          : 'Año'
+                      }
+                    />
+                    <ChartsView
+                      hourlyStats={analyticsHourly.length > 0 ? analyticsHourly : hourlyStats}
+                      regionStats={analyticsRegions.length > 0 ? analyticsRegions : regionStats}
+                      magnitudeStats={analyticsMagnitudes.length > 0 ? analyticsMagnitudes : magnitudeStats}
+                      timeRangeLabel={
+                        analyticsRange === '24h'
+                          ? '24h'
+                          : analyticsRange === '7d'
+                          ? 'Semana'
+                          : analyticsRange === '30d'
+                          ? 'Mes'
+                          : 'Año'
+                      }
+                    />
+                  </>
+                )}
               </div>
             )}
             {currentTab === 'catalog' && <EventsCatalog />}
@@ -240,8 +283,6 @@ export const App: React.FC = () => {
           hourlyStats={hourlyStats}
           regionStats={regionStats}
           magnitudeStats={magnitudeStats}
-          timeRange={timeRange}
-          onTimeRangeChange={handleTimeRangeChange}
         />
       </main>
 

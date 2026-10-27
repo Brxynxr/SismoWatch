@@ -261,7 +261,7 @@ Genera el informe ejecutivo en español con un resumen técnico."""
                 """, (
                     report_date_str,
                     summary_text,
-                    json.dumps(calculated_kpis),
+                    json.dumps(calculated_kpis, default=str),
                     OLLAMA_MODEL,
                     elapsed_ms,
                     True
