@@ -35,13 +35,13 @@ def task_failure_alert(context: dict):
         "log_url": task_instance.log_url if task_instance else "N/A"
     }
 
+    if not webhook_url.startswith(("http://", "https://")):
+        logger.warning("Invalid webhook URL scheme: %s", webhook_url)
+        return
+
     try:
-        req = urllib.request.Request(
-            webhook_url,
-            data=json.dumps(payload).encode("utf-8"),
-            headers={"Content-Type": "application/json"}
-        )
-        with urllib.request.urlopen(req, timeout=5) as response:
-            logger.info("Failure alert successfully dispatched to webhook: status %s", response.status)
+        import requests
+        res = requests.post(webhook_url, json=payload, timeout=5)
+        logger.info("Failure alert successfully dispatched to webhook: status %s", res.status_code)
     except Exception as e:
         logger.error("Failed to dispatch alert to webhook (%s): %s", webhook_url, e)

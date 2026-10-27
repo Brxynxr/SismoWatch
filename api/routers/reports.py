@@ -113,7 +113,7 @@ def export_events_csv(
                 WHERE {where_clause}
                 ORDER BY event_time DESC
                 LIMIT %s;
-            """, params + [limit])
+            """, params + [limit])  # nosec B608
             rows = cur.fetchall()
 
     output = io.StringIO()

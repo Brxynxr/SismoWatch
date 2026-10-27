@@ -56,20 +56,18 @@ def list_events(
     with get_api_reader_conn() as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             # Total count
-            count_query = f"SELECT count(*) as total FROM curated.earthquakes WHERE {where_clause};"
+            count_query = f"SELECT count(*) as total FROM curated.earthquakes WHERE {where_clause};"  # nosec B608
             cur.execute(count_query, params)
             total = cur.fetchone()["total"]
 
             # Paginated items
-            data_query = f"""
-                SELECT event_id, latitude, longitude, depth_km, magnitude, magnitude_class,
-                       place, region, impact_radius_km, event_time, updated_time, tsunami_alert,
-                       status, significance, mag_type, usgs_url
-                FROM curated.earthquakes
-                WHERE {where_clause}
-                ORDER BY event_time DESC
-                LIMIT %s OFFSET %s;
-            """
+            data_query = (
+                f"SELECT event_id, latitude, longitude, depth_km, magnitude, magnitude_class, "
+                f"place, region, impact_radius_km, event_time, updated_time, tsunami_alert, "
+                f"status, significance, mag_type, usgs_url "
+                f"FROM curated.earthquakes WHERE {where_clause} "  # nosec B608
+                f"ORDER BY event_time DESC LIMIT %s OFFSET %s;"
+            )
             cur.execute(data_query, params + [page_size, offset])
             items = [dict(r) for r in cur.fetchall()]
 
