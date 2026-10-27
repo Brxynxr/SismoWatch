@@ -33,11 +33,11 @@ export const ChartsView: React.FC<ChartsViewProps> = ({
   });
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-      {/* Time-Series Trend */}
-      <div className="lg:col-span-2 p-5 rounded-xl border border-slate-800 bg-slate-900/60 backdrop-blur shadow-sm">
+    <div className="space-y-6">
+      {/* 1. Actividad Sísmica Temporal (Full Width Hero Chart) */}
+      <div className="p-5 rounded-2xl border border-slate-800 bg-slate-900/60 backdrop-blur shadow-sm">
         <h3 className="text-sm font-semibold text-slate-300 mb-1">Actividad Sísmica Temporal ({timeRangeLabel})</h3>
-        <p className="text-xs text-slate-500 mb-4">Frecuencia temporal y magnitud máxima observada en cada ventana</p>
+        <p className="text-xs text-slate-500 mb-4">Frecuencia temporal y picos observados en cada ventana</p>
         <div className="h-64 w-full">
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={formattedHourly}>
@@ -68,26 +68,48 @@ export const ChartsView: React.FC<ChartsViewProps> = ({
         </div>
       </div>
 
-      {/* Magnitude Distribution */}
-      <div className="p-5 rounded-xl border border-slate-800 bg-slate-900/60 backdrop-blur shadow-sm">
-        <h3 className="text-sm font-semibold text-slate-300 mb-1">Distribución por Clase</h3>
-        <p className="text-xs text-slate-500 mb-4">Proporción de eventos clasificados (Gold)</p>
-        <div className="h-64 w-full">
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={magnitudeStats} layout="vertical">
-              <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-              <XAxis type="number" stroke="#64748b" fontSize={11} />
-              <YAxis dataKey="magnitude_class" type="category" stroke="#64748b" fontSize={11} width={70} />
-              <Tooltip
-                contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '8px' }}
-              />
-              <Bar dataKey="event_count" name="Eventos" radius={[0, 4, 4, 0]}>
-                {magnitudeStats.map((_, index) => (
-                  <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
+      {/* 2. Grid de 2 columnas debajo: Distribución por Clase & Top Regiones Sísmicas */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* Magnitude Distribution */}
+        <div className="p-5 rounded-2xl border border-slate-800 bg-slate-900/60 backdrop-blur shadow-sm">
+          <h3 className="text-sm font-semibold text-slate-300 mb-1">Distribución por Clase Sísmica</h3>
+          <p className="text-xs text-slate-500 mb-4">Clasificación estándar USGS (Micro, Minor, Light, Moderate)</p>
+          <div className="h-64 w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={magnitudeStats} layout="vertical">
+                <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                <XAxis type="number" stroke="#64748b" fontSize={11} />
+                <YAxis dataKey="magnitude_class" type="category" stroke="#64748b" fontSize={11} width={80} />
+                <Tooltip
+                  contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '8px' }}
+                />
+                <Bar dataKey="event_count" name="Eventos" radius={[0, 4, 4, 0]}>
+                  {magnitudeStats.map((_, index) => (
+                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* Top Active Regions */}
+        <div className="p-5 rounded-2xl border border-slate-800 bg-slate-900/60 backdrop-blur shadow-sm">
+          <h3 className="text-sm font-semibold text-slate-300 mb-1">Top Regiones con Mayor Actividad</h3>
+          <p className="text-xs text-slate-500 mb-4">Zonas tectónicas con mayor acumulación de eventos</p>
+          <div className="h-64 w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={regionStats.slice(0, 5)} layout="vertical">
+                <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                <XAxis type="number" stroke="#64748b" fontSize={11} />
+                <YAxis dataKey="region" type="category" stroke="#64748b" fontSize={11} width={90} />
+                <Tooltip
+                  contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '8px' }}
+                />
+                <Bar dataKey="event_count" name="Sismos" fill="#06b6d4" radius={[0, 4, 4, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
         </div>
       </div>
     </div>
