@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import Globe, { GlobeMethods } from 'react-globe.gl';
 import { EarthquakeEvent } from '../types';
-import { Waves, ZoomIn, ZoomOut, Compass, RotateCcw, Layers } from 'lucide-react';
+import { Waves, ZoomIn, ZoomOut, Compass } from 'lucide-react';
 
 interface SeismicGlobe3DProps {
   events: EarthquakeEvent[];
@@ -351,15 +351,6 @@ export const SeismicGlobe3D: React.FC<SeismicGlobe3DProps> = ({
       {/* Cockpit Overlay: Top Controls */}
       <div className="absolute top-4 left-4 z-20 flex items-center gap-2">
         <button
-          onClick={resetView}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-900/80 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-700/80 backdrop-blur text-xs font-medium shadow-lg transition-colors cursor-pointer"
-          title="Restablecer vista global"
-        >
-          <RotateCcw className="w-3.5 h-3.5 text-sky-400" />
-          Vista Global
-        </button>
-
-        <button
           onClick={() => setIsRotating(!isRotating)}
           className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border backdrop-blur text-xs font-medium shadow-lg transition-colors cursor-pointer ${
             isRotating
@@ -370,19 +361,6 @@ export const SeismicGlobe3D: React.FC<SeismicGlobe3DProps> = ({
         >
           <Compass className={`w-3.5 h-3.5 ${isRotating ? 'animate-spin' : ''}`} />
           {isRotating ? 'Auto-Rotación: ON' : 'Auto-Rotación: OFF'}
-        </button>
-
-        <button
-          onClick={() => setShowAllBeacons(!showAllBeacons)}
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border backdrop-blur text-xs font-medium shadow-lg transition-colors cursor-pointer ${
-            showAllBeacons
-              ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40'
-              : 'bg-slate-900/80 text-slate-400 border-slate-700/80 hover:text-white'
-          }`}
-          title="Proyectar líneas láser verticales en los epicentros"
-        >
-          <Layers className="w-3.5 h-3.5 text-cyan-400" />
-          {showAllBeacons ? 'Balizas Láser: ON' : 'Balizas Láser: OFF'}
         </button>
       </div>
 
