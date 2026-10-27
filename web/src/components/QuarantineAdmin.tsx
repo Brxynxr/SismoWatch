@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { AlertOctagon, RefreshCw, Database, ShieldAlert, CheckCircle, Clock, Play } from 'lucide-react';
+import { AlertOctagon, RefreshCw, Database, ShieldAlert, CheckCircle, Clock, Play, FileCode, X } from 'lucide-react';
 import { QuarantineRecord } from '../types';
 import { api } from '../services/api';
 
@@ -102,78 +102,101 @@ export const QuarantineAdmin: React.FC = () => {
         </div>
       </div>
 
-      {/* Quarantine Table */}
-      <div className="rounded-xl border border-slate-800 bg-slate-900/60 backdrop-blur overflow-hidden">
-        <div className="p-4 border-b border-slate-800 bg-slate-950/60 flex items-center justify-between">
+      {/* Quarantine Cards Section (Zero Horizontal Scroll) */}
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
           <h3 className="text-sm font-bold text-white flex items-center gap-2">
             <AlertOctagon className="w-4 h-4 text-amber-400" />
             Registros Aislados en Cuarentena
           </h3>
-          <span className="text-xs font-mono text-slate-400">Total: {total}</span>
+          <span className="text-xs font-mono text-slate-400">Total: {total} filas aisladas</span>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs text-slate-300">
-            <thead className="bg-slate-950/80 uppercase text-[11px] font-semibold text-slate-400 border-b border-slate-800">
-              <tr>
-                <th className="px-4 py-3">ID Cuarentena</th>
-                <th className="px-4 py-3">ID Evento</th>
-                <th className="px-4 py-3">Reglas Violadas</th>
-                <th className="px-4 py-3">Motivo de Rechazo</th>
-                <th className="px-4 py-3">Fecha Aislamiento</th>
-                <th className="px-4 py-3">Payload</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-800/60 font-mono">
-              {loading ? (
-                <tr>
-                  <td colSpan={6} className="px-4 py-8 text-center text-slate-500 font-sans">
-                    Consultando cuarentena...
-                  </td>
-                </tr>
-              ) : quarantineItems.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="px-4 py-8 text-center text-emerald-400 font-sans">
-                    ✓ Cero registros en cuarentena. Todos los datos ingresados cumplen las reglas de calidad Pandera.
-                  </td>
-                </tr>
-              ) : (
-                quarantineItems.map((item) => (
-                  <tr key={item.quarantine_id} className="hover:bg-slate-800/40 transition-colors">
-                    <td className="px-4 py-2.5 font-bold text-slate-400">#{item.quarantine_id}</td>
-                    <td className="px-4 py-2.5 text-amber-400 font-semibold">{item.event_id || 'NULL'}</td>
-                    <td className="px-4 py-2.5 font-sans">
-                      <div className="flex flex-wrap gap-1">
-                        {item.failed_rules?.map((r, i) => (
+        {loading ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} className="p-4 rounded-xl border border-slate-800 bg-slate-900/40 animate-pulse h-44 flex flex-col justify-between">
+                <div className="h-4 bg-slate-800 rounded w-1/3 mb-2"></div>
+                <div className="h-3 bg-slate-800 rounded w-2/3 mb-4"></div>
+                <div className="h-12 bg-slate-800 rounded mb-2"></div>
+              </div>
+            ))}
+          </div>
+        ) : quarantineItems.length === 0 ? (
+          <div className="p-12 text-center rounded-xl border border-slate-800 bg-slate-900/60 backdrop-blur text-emerald-400 text-xs">
+            ✓ Cero registros en cuarentena. Todos los datos ingresados cumplen las reglas de calidad Pandera.
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
+            {quarantineItems.map((item) => (
+              <div
+                key={item.quarantine_id}
+                className="p-4 rounded-xl border border-amber-500/20 bg-slate-900/70 hover:border-amber-500/40 hover:bg-slate-900 transition-all flex flex-col justify-between shadow-sm"
+              >
+                <div>
+                  {/* Top Header: Quarantine ID & Event ID */}
+                  <div className="flex items-start justify-between gap-2 mb-2">
+                    <span className="font-mono text-[10px] px-2 py-0.5 rounded bg-amber-500/10 border border-amber-500/30 text-amber-300 font-bold">
+                      Cuarentena #{item.quarantine_id}
+                    </span>
+                    <span className="font-mono text-xs font-bold text-slate-300 truncate max-w-[150px]">
+                      {item.event_id || 'ID_VACÍO'}
+                    </span>
+                  </div>
+
+                  {/* Failed Rules Badges */}
+                  <div className="mb-2.5">
+                    <span className="text-[10px] font-mono text-slate-500 uppercase block mb-1">Reglas Violadas:</span>
+                    <div className="flex flex-wrap gap-1">
+                      {item.failed_rules && item.failed_rules.length > 0 ? (
+                        item.failed_rules.map((r, i) => (
                           <span
                             key={i}
-                            className="px-1.5 py-0.5 rounded text-[10px] bg-rose-500/10 text-rose-300 border border-rose-500/20"
+                            className="px-1.5 py-0.5 rounded text-[10px] font-mono bg-rose-500/15 text-rose-300 border border-rose-500/30 font-semibold"
                           >
                             {r}
                           </span>
-                        ))}
-                      </div>
-                    </td>
-                    <td className="px-4 py-2.5 font-sans text-slate-300 max-w-xs truncate" title={item.rejection_reason}>
-                      {item.rejection_reason}
-                    </td>
-                    <td className="px-4 py-2.5 text-slate-400">
-                      {new Date(item.quarantined_at).toLocaleString()}
-                    </td>
-                    <td className="px-4 py-2.5 font-sans">
-                      <button
-                        onClick={() => setSelectedPayload(item.payload)}
-                        className="text-xs text-sky-400 hover:text-sky-300 underline"
-                      >
-                        Ver JSON
-                      </button>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
+                        ))
+                      ) : (
+                        <span className="px-1.5 py-0.5 rounded text-[10px] font-mono bg-amber-500/15 text-amber-300 border border-amber-500/30">
+                          ANOMALÍA_ESQUEMA
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Rejection Reason */}
+                  <div className="p-2.5 rounded-lg bg-slate-950/80 border border-slate-800/80 mb-3">
+                    <span className="text-[9px] font-mono uppercase text-slate-500 block mb-0.5">Motivo del Rechazo:</span>
+                    <p className="text-[11px] font-mono text-slate-300 line-clamp-2 leading-relaxed" title={item.rejection_reason}>
+                      {item.rejection_reason || 'Rechazado por validación de esquema en Silver'}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Footer: Date and JSON inspection button */}
+                <div className="flex items-center justify-between pt-2 border-t border-slate-800/80 text-[11px] text-slate-400">
+                  <span className="flex items-center gap-1 font-mono text-[10px]">
+                    <Clock className="w-3 h-3 text-slate-500" />
+                    {new Date(item.quarantined_at).toLocaleString([], {
+                      month: 'short',
+                      day: 'numeric',
+                      hour: '2-digit',
+                      minute: '2-digit'
+                    })}
+                  </span>
+                  <button
+                    onClick={() => setSelectedPayload(item.payload)}
+                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-sky-400 hover:text-sky-300 text-[11px] font-medium border border-slate-700 transition-colors cursor-pointer"
+                  >
+                    <FileCode className="w-3 h-3" />
+                    Ver JSON
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Modal for Raw JSON Payload */}

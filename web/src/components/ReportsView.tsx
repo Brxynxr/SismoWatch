@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { FileText, Sparkles, RefreshCw, Calendar, Globe, AlertCircle, Shield, Printer } from 'lucide-react';
+import { FileText, Sparkles, RefreshCw, Calendar, Globe, AlertCircle, Shield, Printer, CheckCircle } from 'lucide-react';
 import { AIReport, User } from '../types';
 import { api } from '../services/api';
 
@@ -47,6 +47,95 @@ export const ReportsView: React.FC<ReportsViewProps> = ({ user }) => {
     } finally {
       setRegenerating(false);
     }
+  };
+
+  const renderFormattedSummary = (rawText: string) => {
+    if (!rawText) return null;
+
+    // Split into major blocks by triple dashes or double linebreaks
+    const rawSections = rawText
+      .split(/\s*---\s*|\n{2,}/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+
+    return (
+      <div className="space-y-4">
+        {rawSections.map((section, idx) => {
+          // Clean up asterisks for titles
+          const cleanSection = section.replace(/\*\*/g, '').trim();
+
+          // Check if section is a header or title
+          if (cleanSection.toLowerCase().startsWith('informe ejecutivo')) {
+            return (
+              <div key={idx} className="pb-3 border-b border-slate-800">
+                <span className="text-[10px] font-mono uppercase tracking-wider text-sky-400 font-bold block mb-1">
+                  Documento de Auditoría Sísmica Oficial
+                </span>
+                <h5 className="text-sm font-bold text-white leading-snug">
+                  {cleanSection}
+                </h5>
+              </div>
+            );
+          }
+
+          // Check if section is Conclusiones
+          if (cleanSection.toLowerCase().startsWith('conclusiones')) {
+            const content = cleanSection.replace(/^conclusiones[:\s-]*/i, '');
+            return (
+              <div key={idx} className="p-3.5 rounded-xl bg-sky-950/30 border border-sky-800/40 text-xs text-slate-200">
+                <span className="font-bold text-sky-300 block mb-1 uppercase tracking-wide text-[11px] flex items-center gap-1.5">
+                  <CheckCircle className="w-3.5 h-3.5 text-sky-400" />
+                  Conclusiones y Evaluación
+                </span>
+                <p className="leading-relaxed text-slate-300">{content}</p>
+              </div>
+            );
+          }
+
+          // Parse list items or numbered points like 1. Total de Sismos: ... 2. Magnitud: ...
+          const numberedItems = section.split(/(?=\d+\.\s+)/);
+          if (numberedItems.length > 1) {
+            return (
+              <div key={idx} className="space-y-2.5">
+                {numberedItems.map((item, itemIdx) => {
+                  const cleanItem = item.trim();
+                  if (!cleanItem) return null;
+
+                  const match = cleanItem.match(/^(\d+)\.\s*(?:\*\*)?([^*:]+)(?:\*\*)?[:\s-]+([\s\S]*)$/);
+                  if (match) {
+                    const [, num, itemTitle, itemBody] = match;
+                    return (
+                      <div key={itemIdx} className="flex items-start gap-2.5 p-3 rounded-lg bg-slate-950/70 border border-slate-800/70 text-xs">
+                        <span className="w-5 h-5 rounded-full bg-sky-500/15 border border-sky-500/30 text-sky-400 font-mono font-bold text-[10px] flex items-center justify-center shrink-0 mt-0.5">
+                          {num}
+                        </span>
+                        <div className="flex-1">
+                          <strong className="text-slate-100 font-semibold block mb-0.5">{itemTitle.replace(/\*\*/g, '').trim()}</strong>
+                          <span className="text-slate-300 leading-relaxed">{itemBody.replace(/\*\*/g, '').trim()}</span>
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <p key={itemIdx} className="text-xs text-slate-300 leading-relaxed">
+                      {cleanItem.replace(/\*\*/g, '')}
+                    </p>
+                  );
+                })}
+              </div>
+            );
+          }
+
+          // Default clean paragraph without any asterisks
+          return (
+            <p key={idx} className="text-xs text-slate-300 leading-relaxed">
+              {cleanSection}
+            </p>
+          );
+        })}
+      </div>
+    );
   };
 
   return (
@@ -140,8 +229,8 @@ export const ReportsView: React.FC<ReportsViewProps> = ({ user }) => {
             <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">
               Resumen Ejecutivo
             </h4>
-            <div className="p-4 rounded-xl bg-slate-950/40 border border-slate-800/80 text-sm leading-relaxed text-slate-200">
-              {latestReport.summary}
+            <div className="p-5 rounded-xl bg-slate-950/60 border border-slate-800/80 text-sm leading-relaxed text-slate-200">
+              {renderFormattedSummary(latestReport.summary)}
             </div>
           </div>
 

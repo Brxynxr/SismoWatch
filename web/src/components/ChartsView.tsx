@@ -37,16 +37,16 @@ export const ChartsView: React.FC<ChartsViewProps> = ({
         };
       case 'Mes':
         return {
-          title: 'Actividad Sísmica Diaria (Últimos 30 Días)',
-          metricUnit: 'Escala: Días del mes',
-          subtitle: 'Eje X: Días calendario • Eje Y: Cantidad de sismos registrados por día',
-          yAxisLabel: 'Sismos / día'
+          title: 'Actividad Sísmica por Semanas (Últimos 30 Días)',
+          metricUnit: 'Escala: Semanas del mes',
+          subtitle: 'Eje X: Semanas del mes en orden cronológico • Eje Y: Cantidad de sismos registrados por semana',
+          yAxisLabel: 'Sismos / semana'
         };
       case 'Año':
         return {
           title: 'Actividad Sísmica Mensual (Último Año)',
           metricUnit: 'Escala: Meses del año',
-          subtitle: 'Eje X: Meses del año • Eje Y: Cantidad de sismos registrados por mes',
+          subtitle: 'Eje X: Meses del año en orden cronológico • Eje Y: Cantidad de sismos registrados por mes',
           yAxisLabel: 'Sismos / mes'
         };
       default:
@@ -61,7 +61,7 @@ export const ChartsView: React.FC<ChartsViewProps> = ({
 
   const meta = getRangeMeta();
 
-  const formattedHourly = hourlyStats.map((h) => {
+  const formattedHourly = hourlyStats.map((h, idx) => {
     try {
       const d = new Date(h.hour_bucket);
       let axisLabel = '';
@@ -72,14 +72,16 @@ export const ChartsView: React.FC<ChartsViewProps> = ({
         tooltipTitle = `Hora: ${axisLabel} (${d.toLocaleDateString([], { day: 'numeric', month: 'short' })})`;
       } else if (timeRangeLabel === 'Semana') {
         axisLabel = d.toLocaleDateString([], { weekday: 'short', day: 'numeric' });
-        tooltipTitle = d.toLocaleDateString([], { weekday: 'long', day: 'numeric', month: 'long' });
+        tooltipTitle = `Día: ${d.toLocaleDateString([], { weekday: 'long', day: 'numeric', month: 'long' })}`;
       } else if (timeRangeLabel === 'Mes') {
-        axisLabel = d.toLocaleDateString([], { day: 'numeric', month: 'short' });
-        tooltipTitle = d.toLocaleDateString([], { day: 'numeric', month: 'long', year: 'numeric' });
+        axisLabel = `Semana ${idx + 1}`;
+        const endOfWeek = new Date(d);
+        endOfWeek.setDate(d.getDate() + 6);
+        tooltipTitle = `Semana ${idx + 1} (${d.toLocaleDateString([], { day: 'numeric', month: 'short' })} - ${endOfWeek.toLocaleDateString([], { day: 'numeric', month: 'short' })})`;
       } else {
         // Año
-        axisLabel = d.toLocaleDateString([], { month: 'short', year: '2-digit' });
-        tooltipTitle = d.toLocaleDateString([], { month: 'long', year: 'numeric' });
+        axisLabel = d.toLocaleDateString([], { month: 'short' });
+        tooltipTitle = `Mes: ${d.toLocaleDateString([], { month: 'long', year: 'numeric' })}`;
       }
 
       return {

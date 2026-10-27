@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Download, Search, Filter, ChevronLeft, ChevronRight, ExternalLink } from 'lucide-react';
+import { Download, Search, Filter, ChevronLeft, ChevronRight, ExternalLink, Clock, AlertTriangle, Activity } from 'lucide-react';
 import { EarthquakeEvent } from '../types';
 import { api, getStoredUser } from '../services/api';
 
@@ -138,99 +138,144 @@ export const EventsCatalog: React.FC = () => {
         </button>
       </div>
 
-      {/* Events Table */}
-      <div className="rounded-xl border border-slate-800 bg-slate-900/60 backdrop-blur overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs text-slate-300">
-            <thead className="bg-slate-950/80 uppercase text-[11px] font-semibold text-slate-400 border-b border-slate-800">
-              <tr>
-                <th className="px-4 py-3">ID Evento</th>
-                <th className="px-4 py-3">Magnitud</th>
-                <th className="px-4 py-3">Lugar & Región</th>
-                <th className="px-4 py-3">Prof.</th>
-                <th className="px-4 py-3">Radio PGA</th>
-                <th className="px-4 py-3">Fecha y Hora (UTC)</th>
-                <th className="px-4 py-3">Tsunami</th>
-                <th className="px-4 py-3">USGS</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-800/60 font-mono">
-              {loading ? (
-                <tr>
-                  <td colSpan={8} className="px-4 py-8 text-center text-slate-500 font-sans">
-                    Cargando catálogo curado...
-                  </td>
-                </tr>
-              ) : events.length === 0 ? (
-                <tr>
-                  <td colSpan={8} className="px-4 py-8 text-center text-slate-500 font-sans">
-                    No se encontraron sismos con los filtros actuales.
-                  </td>
-                </tr>
-              ) : (
-                events.map((ev) => (
-                  <tr key={ev.event_id} className="hover:bg-slate-800/40 transition-colors">
-                    <td className="px-4 py-2.5 font-bold text-sky-400">{ev.event_id}</td>
-                    <td className="px-4 py-2.5 font-sans">
-                      <span className={`px-2 py-0.5 rounded font-bold text-xs ${
-                        ev.magnitude >= 4.5
-                          ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
-                          : ev.magnitude >= 2.5
-                          ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
-                          : 'bg-sky-500/20 text-sky-300 border border-sky-500/30'
-                      }`}>
+      {/* Events Grid (3 Column Cards Layout - Zero Horizontal Scroll) */}
+      <div className="space-y-4">
+        {loading ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} className="p-4 rounded-xl border border-slate-800 bg-slate-900/40 animate-pulse h-40 flex flex-col justify-between">
+                <div className="h-4 bg-slate-800 rounded w-1/3 mb-2"></div>
+                <div className="h-3 bg-slate-800 rounded w-3/4 mb-4"></div>
+                <div className="grid grid-cols-3 gap-2">
+                  <div className="h-6 bg-slate-800 rounded"></div>
+                  <div className="h-6 bg-slate-800 rounded"></div>
+                  <div className="h-6 bg-slate-800 rounded"></div>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : events.length === 0 ? (
+          <div className="p-12 text-center rounded-xl border border-slate-800 bg-slate-900/60 backdrop-blur text-slate-500 text-xs">
+            No se encontraron sismos con los filtros actuales en el catálogo curado.
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
+            {events.map((ev) => {
+              const isStrong = Number(ev.magnitude) >= 4.5;
+              const isMinor = Number(ev.magnitude) >= 2.5;
+              const badgeClass = isStrong
+                ? 'bg-rose-500/20 text-rose-300 border-rose-500/40'
+                : isMinor
+                ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                : 'bg-sky-500/20 text-sky-300 border-sky-500/40';
+
+              const eventDate = new Date(ev.event_time);
+              const formattedDate = eventDate.toLocaleDateString([], {
+                month: 'short',
+                day: 'numeric'
+              });
+              const formattedTime = eventDate.toLocaleTimeString([], {
+                hour: '2-digit',
+                minute: '2-digit'
+              });
+
+              return (
+                <div
+                  key={ev.event_id}
+                  className="p-4 rounded-xl border border-slate-800 bg-slate-900/70 hover:border-slate-700 hover:bg-slate-900 transition-all flex flex-col justify-between group shadow-sm hover:shadow-md"
+                >
+                  <div>
+                    {/* Top Header: ID & Magnitude */}
+                    <div className="flex items-start justify-between gap-2 mb-2">
+                      <span className="font-mono text-[11px] font-bold text-sky-400 group-hover:text-sky-300 transition-colors">
+                        #{ev.event_id}
+                      </span>
+                      <span className={`px-2 py-0.5 rounded text-[11px] font-bold font-mono border whitespace-nowrap ${badgeClass}`}>
                         M {Number(ev.magnitude).toFixed(1)} ({ev.magnitude_class})
                       </span>
-                    </td>
-                    <td className="px-4 py-2.5 font-sans">
-                      <span className="font-medium text-slate-200 block truncate max-w-xs">{ev.place}</span>
-                      <span className="text-[10px] text-slate-400">{ev.region}</span>
-                    </td>
-                    <td className="px-4 py-2.5">{Number(ev.depth_km).toFixed(1)} km</td>
-                    <td className="px-4 py-2.5 text-emerald-400">{ev.impact_radius_km} km</td>
-                    <td className="px-4 py-2.5 text-slate-400">{new Date(ev.event_time).toLocaleString()}</td>
-                    <td className="px-4 py-2.5 font-sans">
-                      {ev.tsunami_alert ? (
-                        <span className="text-rose-400 font-bold">ALERTA</span>
-                      ) : (
-                        <span className="text-slate-500">No</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-2.5">
+                    </div>
+
+                    {/* Place and Region */}
+                    <h4 className="text-xs font-semibold text-slate-200 line-clamp-2 mb-1 group-hover:text-white transition-colors" title={ev.place}>
+                      {ev.place || 'Epicentro no especificado'}
+                    </h4>
+                    <span className="text-[11px] text-slate-400 block mb-3">
+                      Región: <span className="text-slate-300">{ev.region || 'Global'}</span>
+                    </span>
+
+                    {/* Metrics Grid */}
+                    <div className="grid grid-cols-3 gap-1.5 p-2 rounded-lg bg-slate-950/70 border border-slate-800/70 text-[10px] font-mono text-slate-400 mb-3">
+                      <div>
+                        <span className="text-slate-500 block text-[9px] uppercase">Profundidad</span>
+                        <span className="text-slate-200 font-semibold">{Number(ev.depth_km ?? 0).toFixed(1)} km</span>
+                      </div>
+                      <div>
+                        <span className="text-slate-500 block text-[9px] uppercase">Radio PGA</span>
+                        <span className="text-sky-400 font-semibold">{Number(ev.impact_radius_km ?? 0).toFixed(0)} km</span>
+                      </div>
+                      <div>
+                        <span className="text-slate-500 block text-[9px] uppercase">Estado</span>
+                        <span className="text-emerald-400 font-semibold capitalize">{ev.status || 'rec'}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Card Footer: Timestamp & USGS External Link */}
+                  <div>
+                    {ev.tsunami_alert && (
+                      <div className="mb-2.5 flex items-center gap-1.5 text-[10px] font-bold text-rose-400 bg-rose-500/10 border border-rose-500/30 px-2 py-1 rounded">
+                        <AlertTriangle className="w-3 h-3" />
+                        ALERTA DE TSUNAMI
+                      </div>
+                    )}
+                    <div className="flex items-center justify-between pt-2 border-t border-slate-800/80 text-[11px] text-slate-400">
+                      <span className="flex items-center gap-1 font-mono text-[10px]">
+                        <Clock className="w-3 h-3 text-slate-500" />
+                        {formattedDate} {formattedTime}
+                      </span>
                       {ev.usgs_url ? (
                         <a
                           href={ev.usgs_url}
                           target="_blank"
                           rel="noreferrer"
-                          className="text-sky-400 hover:text-sky-300 inline-flex items-center gap-1"
+                          className="inline-flex items-center gap-1 text-[11px] text-sky-400 hover:text-sky-300 hover:underline"
                         >
-                          <ExternalLink className="w-3.5 h-3.5" />
+                          Ficha USGS
+                          <ExternalLink className="w-3 h-3" />
                         </a>
-                      ) : '--'}
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
+                      ) : (
+                        <span className="text-slate-600 text-[10px]">Sin ficha</span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
 
         {/* Pagination Footer */}
-        <div className="p-3 border-t border-slate-800 bg-slate-950/60 flex items-center justify-between text-xs text-slate-400">
-          <span>Mostrando {events.length} de {total} registros en Capa Gold</span>
+        <div className="p-3.5 rounded-xl border border-slate-800 bg-slate-950/70 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-400">
+          <span className="font-mono text-[11px]">
+            Mostrando <strong className="text-slate-200">{events.length}</strong> de <strong className="text-sky-400">{total.toLocaleString()}</strong> registros en Capa Gold
+          </span>
           <div className="flex items-center gap-2">
             <button
               onClick={() => setPage((p) => Math.max(1, p - 1))}
-              disabled={page <= 1}
-              className="p-1 rounded bg-slate-800 hover:bg-slate-700 disabled:opacity-40"
+              disabled={page <= 1 || loading}
+              className="p-1.5 rounded-lg bg-slate-900 border border-slate-800 hover:bg-slate-800 hover:border-slate-700 disabled:opacity-40 text-slate-300 transition-colors cursor-pointer"
+              title="Página anterior"
             >
               <ChevronLeft className="w-4 h-4" />
             </button>
-            <span>Página {page} de {totalPages}</span>
+            <span className="font-mono text-[11px] px-2">
+              Página <strong className="text-slate-200">{page}</strong> de <strong className="text-slate-200">{totalPages}</strong>
+            </span>
             <button
               onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-              disabled={page >= totalPages}
-              className="p-1 rounded bg-slate-800 hover:bg-slate-700 disabled:opacity-40"
+              disabled={page >= totalPages || loading}
+              className="p-1.5 rounded-lg bg-slate-900 border border-slate-800 hover:bg-slate-800 hover:border-slate-700 disabled:opacity-40 text-slate-300 transition-colors cursor-pointer"
+              title="Página siguiente"
             >
               <ChevronRight className="w-4 h-4" />
             </button>

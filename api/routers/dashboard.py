@@ -54,7 +54,9 @@ def get_hourly_stats(
     interval_val = INTERVAL_MAP.get(range, "24 hours")
     if range == "1y":
         date_trunc = "month"
-    elif range in ("7d", "30d"):
+    elif range == "30d":
+        date_trunc = "week"
+    elif range == "7d":
         date_trunc = "day"
     else:
         date_trunc = "hour"

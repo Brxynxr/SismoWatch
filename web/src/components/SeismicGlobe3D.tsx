@@ -9,6 +9,165 @@ interface SeismicGlobe3DProps {
   onSelectEvent: (event: EarthquakeEvent) => void;
 }
 
+const CosmicStarfield: React.FC<{ width: number; height: number }> = ({ width, height }) => {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    let animId: number;
+
+    // Twinkling stars
+    const starCount = 200;
+    const stars: Array<{
+      x: number;
+      y: number;
+      radius: number;
+      alpha: number;
+      baseAlpha: number;
+      speed: number;
+    }> = [];
+
+    for (let i = 0; i < starCount; i++) {
+      const baseAlpha = Math.random() * 0.7 + 0.2;
+      stars.push({
+        x: Math.random() * width,
+        y: Math.random() * height,
+        radius: Math.random() * 1.3 + 0.4,
+        alpha: baseAlpha,
+        baseAlpha,
+        speed: Math.random() * 0.02 + 0.005,
+      });
+    }
+
+    // Shooting stars (Estrellas fugaces)
+    interface ShootingStar {
+      x: number;
+      y: number;
+      length: number;
+      speed: number;
+      angle: number;
+      opacity: number;
+      life: number;
+      maxLife: number;
+    }
+    const shootingStars: ShootingStar[] = [];
+
+    let lastSpawnTime = Date.now();
+    let nextSpawnDelay = Math.random() * 2500 + 1500;
+
+    const spawnShootingStar = () => {
+      const angle = (Math.random() * 20 + 30) * (Math.PI / 180);
+      shootingStars.push({
+        x: Math.random() * width * 0.85,
+        y: Math.random() * height * 0.35,
+        length: Math.random() * 90 + 65,
+        speed: Math.random() * 6 + 10,
+        angle,
+        opacity: 1,
+        life: 0,
+        maxLife: Math.random() * 35 + 30,
+      });
+    };
+
+    const render = () => {
+      ctx.clearRect(0, 0, width, height);
+
+      // Deep space radial gradient
+      const bgGrad = ctx.createRadialGradient(
+        width * 0.5,
+        height * 0.5,
+        80,
+        width * 0.5,
+        height * 0.5,
+        Math.max(width, height)
+      );
+      bgGrad.addColorStop(0, '#030816');
+      bgGrad.addColorStop(0.6, '#020510');
+      bgGrad.addColorStop(1, '#000206');
+      ctx.fillStyle = bgGrad;
+      ctx.fillRect(0, 0, width, height);
+
+      // Draw and twinkle stars
+      for (const s of stars) {
+        s.alpha = s.baseAlpha + Math.sin(Date.now() * s.speed) * 0.25;
+        const finalAlpha = Math.max(0.15, Math.min(1, s.alpha));
+        ctx.beginPath();
+        ctx.arc(s.x, s.y, s.radius, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(255, 255, 255, ${finalAlpha})`;
+        ctx.shadowBlur = s.radius > 1.1 ? 4 : 0;
+        ctx.shadowColor = '#38bdf8';
+        ctx.fill();
+      }
+      ctx.shadowBlur = 0;
+
+      // Spawn shooting stars periodically
+      const now = Date.now();
+      if (now - lastSpawnTime > nextSpawnDelay) {
+        spawnShootingStar();
+        lastSpawnTime = now;
+        nextSpawnDelay = Math.random() * 3500 + 2500;
+      }
+
+      // Draw and update shooting stars
+      for (let i = shootingStars.length - 1; i >= 0; i--) {
+        const ss = shootingStars[i];
+        ss.life++;
+        const tailX = ss.x - Math.cos(ss.angle) * ss.length;
+        const tailY = ss.y - Math.sin(ss.angle) * ss.length;
+
+        const currentOpacity = Math.max(0, 1 - ss.life / ss.maxLife);
+
+        const grad = ctx.createLinearGradient(tailX, tailY, ss.x, ss.y);
+        grad.addColorStop(0, 'rgba(56, 189, 248, 0)');
+        grad.addColorStop(0.7, `rgba(56, 189, 248, ${currentOpacity * 0.6})`);
+        grad.addColorStop(1, `rgba(255, 255, 255, ${currentOpacity})`);
+
+        ctx.beginPath();
+        ctx.moveTo(tailX, tailY);
+        ctx.lineTo(ss.x, ss.y);
+        ctx.strokeStyle = grad;
+        ctx.lineWidth = 1.6;
+        ctx.lineCap = 'round';
+        ctx.stroke();
+
+        // Star head bright nucleus
+        ctx.beginPath();
+        ctx.arc(ss.x, ss.y, 1.2, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(255, 255, 255, ${currentOpacity})`;
+        ctx.fill();
+
+        ss.x += Math.cos(ss.angle) * ss.speed;
+        ss.y += Math.sin(ss.angle) * ss.speed;
+
+        if (ss.life >= ss.maxLife || ss.x > width + 100 || ss.y > height + 100) {
+          shootingStars.splice(i, 1);
+        }
+      }
+
+      animId = requestAnimationFrame(render);
+    };
+
+    render();
+
+    return () => {
+      cancelAnimationFrame(animId);
+    };
+  }, [width, height]);
+
+  return (
+    <canvas
+      ref={canvasRef}
+      width={width}
+      height={height}
+      className="absolute inset-0 pointer-events-none z-0"
+    />
+  );
+};
+
 export const SeismicGlobe3D: React.FC<SeismicGlobe3DProps> = ({
   events,
   selectedEvent,
@@ -147,11 +306,14 @@ export const SeismicGlobe3D: React.FC<SeismicGlobe3DProps> = ({
 
   return (
     <div ref={containerRef} className="relative w-full h-full min-h-[550px] overflow-hidden bg-slate-950 select-none">
+      {/* Dynamic Cosmic Starfield & Shooting Stars Canvas */}
+      <CosmicStarfield width={dimensions.width} height={dimensions.height} />
+
       <Globe
         ref={globeRef}
         width={dimensions.width}
         height={dimensions.height}
-        backgroundColor="#020617"
+        backgroundColor="rgba(0,0,0,0)"
         globeImageUrl="//unpkg.com/three-globe/example/img/earth-night.jpg"
         bumpImageUrl="//unpkg.com/three-globe/example/img/earth-topology.png"
         showAtmosphere={true}
