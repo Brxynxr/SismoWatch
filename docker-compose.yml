@@ -22,7 +22,7 @@ x-airflow-common: &airflow-common
     DB_TRANSFORMATION_PASSWORD: ${DB_TRANSFORMATION_PASSWORD:-transformation_secret_pwd_2026}
     FAILURE_ALERT_WEBHOOK_URL: ${FAILURE_ALERT_WEBHOOK_URL:-https://httpbin.org/post}
     OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
-    OLLAMA_MODEL: ${OLLAMA_MODEL:-phi3:latest}
+    OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2.5-coder:1.5b}
     PYTHONPATH: /opt/airflow
   volumes:
     - ./airflow/dags:/opt/airflow/dags

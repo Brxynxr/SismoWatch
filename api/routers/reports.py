@@ -19,13 +19,27 @@ def list_reports(
     with get_api_reader_conn() as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute("""
-                SELECT report_id, report_date, title, summary, total_events, 
-                       max_magnitude, regions_affected, generated_at
+                SELECT report_id, report_date, summary_text, calculated_kpis,
+                       model_name, execution_time_ms, created_at
                 FROM curated.ai_reports
-                ORDER BY report_date DESC, generated_at DESC
+                ORDER BY report_date DESC, created_at DESC
                 LIMIT %s;
             """, (limit,))
-            return [dict(r) for r in cur.fetchall()]
+            rows = cur.fetchall()
+            results = []
+            for r in rows:
+                kpis = r.get("calculated_kpis") or {}
+                results.append({
+                    "report_id": r["report_id"],
+                    "report_date": str(r["report_date"]),
+                    "title": kpis.get("title", f"Informe Sísmico Diario {r['report_date']}"),
+                    "summary": r["summary_text"],
+                    "total_events": kpis.get("total_events", 0),
+                    "max_magnitude": kpis.get("max_magnitude", 0.0),
+                    "regions_affected": kpis.get("regions_affected", []),
+                    "generated_at": r["created_at"].isoformat() if r["created_at"] else ""
+                })
+            return results
 
 @router.get("/latest", response_model=Dict[str, Any])
 def get_latest_report(current_user: UserPayload = Depends(get_current_user)):
@@ -33,15 +47,14 @@ def get_latest_report(current_user: UserPayload = Depends(get_current_user)):
     with get_api_reader_conn() as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute("""
-                SELECT report_id, report_date, title, summary, key_findings,
-                       recommendations, total_events, max_magnitude, regions_affected,
-                       model_used, execution_seconds, generated_at
+                SELECT report_id, report_date, summary_text, calculated_kpis,
+                       model_name, execution_time_ms, created_at
                 FROM curated.ai_reports
-                ORDER BY generated_at DESC
+                ORDER BY created_at DESC
                 LIMIT 1;
             """)
-            row = cur.fetchone()
-            if not row:
+            r = cur.fetchone()
+            if not r:
                 return {
                     "report_id": 0,
                     "report_date": datetime.utcnow().strftime("%Y-%m-%d"),
@@ -56,7 +69,21 @@ def get_latest_report(current_user: UserPayload = Depends(get_current_user)):
                     "execution_seconds": 0.0,
                     "generated_at": datetime.utcnow().isoformat()
                 }
-            return dict(row)
+            kpis = r.get("calculated_kpis") or {}
+            return {
+                "report_id": r["report_id"],
+                "report_date": str(r["report_date"]),
+                "title": kpis.get("title", f"Informe Sísmico Diario {r['report_date']}"),
+                "summary": r["summary_text"],
+                "key_findings": kpis.get("key_findings", []),
+                "recommendations": kpis.get("recommendations", []),
+                "total_events": kpis.get("total_events", 0),
+                "max_magnitude": kpis.get("max_magnitude", 0.0),
+                "regions_affected": kpis.get("regions_affected", []),
+                "model_used": r["model_name"],
+                "execution_seconds": round((r["execution_time_ms"] or 0) / 1000.0, 2),
+                "generated_at": r["created_at"].isoformat() if r["created_at"] else ""
+            }
 
 @router.get("/export")
 def export_events_csv(

@@ -14,6 +14,7 @@ EXPECTED_DAGS = [
     "usgs_ingest_feed.py",
     "usgs_transform_quality.py",
     "usgs_historical_backfill.py",
+    "usgs_daily_report_anomaly.py",
 ]
 
 def test_dag_files_exist_and_parse():

@@ -92,6 +92,25 @@ def test_admin_can_access_quarantine():
     assert "items" in data
     assert data["requested_by"] == settings.ADMIN_USERNAME
 
+def test_reports_latest_and_export():
+    login_res = client.post("/auth/login", json={"username": settings.VIEWER_USERNAME, "password": settings.VIEWER_PASSWORD})
+    token = login_res.json()["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # Latest report
+    res = client.get("/api/reports/latest", headers=headers)
+    assert res.status_code == 200
+    data = res.json()
+    assert "title" in data
+    assert "summary" in data
+    assert "total_events" in data
+
+    # Export CSV
+    export_res = client.get("/api/reports/export", headers=headers)
+    assert export_res.status_code == 200
+    assert "text/csv" in export_res.headers["content-type"]
+    assert "event_id,event_time" in export_res.text
+
 def test_sql_guardrail_validator():
     # Valid SELECT
     valid_query = "SELECT event_id, magnitude FROM curated.v_events_chat WHERE magnitude > 4.0 ORDER BY magnitude DESC LIMIT 5;"
