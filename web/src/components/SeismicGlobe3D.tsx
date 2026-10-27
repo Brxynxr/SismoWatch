@@ -1,0 +1,207 @@
+import React, { useEffect, useRef, useState } from 'react';
+import Globe, { GlobeMethods } from 'react-globe.gl';
+import { EarthquakeEvent } from '../types';
+import { RotateCcw, ShieldAlert, Waves, ZoomIn, ZoomOut, Compass } from 'lucide-react';
+
+interface SeismicGlobe3DProps {
+  events: EarthquakeEvent[];
+  selectedEvent: EarthquakeEvent | null;
+  onSelectEvent: (event: EarthquakeEvent) => void;
+}
+
+export const SeismicGlobe3D: React.FC<SeismicGlobe3DProps> = ({
+  events,
+  selectedEvent,
+  onSelectEvent,
+}) => {
+  const globeRef = useRef<GlobeMethods>();
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
+  const [isRotating, setIsRotating] = useState<boolean>(true);
+
+  // Resize handler for responsive WebGL canvas
+  useEffect(() => {
+    if (!containerRef.current) return;
+
+    const handleResize = () => {
+      if (containerRef.current) {
+        setDimensions({
+          width: containerRef.current.clientWidth,
+          height: containerRef.current.clientHeight,
+        });
+      }
+    };
+
+    handleResize();
+    const resizeObserver = new ResizeObserver(handleResize);
+    resizeObserver.observe(containerRef.current);
+
+    return () => resizeObserver.disconnect();
+  }, []);
+
+  // Configure auto-rotation and initial view
+  useEffect(() => {
+    if (!globeRef.current) return;
+    const controls = globeRef.current.controls();
+    if (controls) {
+      controls.autoRotate = isRotating;
+      controls.autoRotateSpeed = 0.6;
+      controls.enableDamping = true;
+      controls.dampingFactor = 0.05;
+    }
+  }, [isRotating]);
+
+  // Smoothly orbit camera to selected event
+  useEffect(() => {
+    if (selectedEvent && globeRef.current) {
+      setIsRotating(false);
+      globeRef.current.pointOfView(
+        {
+          lat: selectedEvent.latitude,
+          lng: selectedEvent.longitude,
+          altitude: 1.6,
+        },
+        1200
+      );
+    }
+  }, [selectedEvent]);
+
+  const getMarkerColor = (mag: number): string => {
+    if (mag >= 5.0) return '#f43f5e'; // Rose
+    if (mag >= 4.0) return '#fbbf24'; // Amber
+    if (mag >= 2.5) return '#34d399'; // Emerald
+    return '#38bdf8'; // Sky
+  };
+
+  const getRingColor = (mag: number): string => {
+    if (mag >= 5.0) return 'rgba(244, 63, 94, 0.7)';
+    if (mag >= 4.0) return 'rgba(251, 191, 36, 0.6)';
+    if (mag >= 2.5) return 'rgba(52, 211, 153, 0.5)';
+    return 'rgba(56, 189, 248, 0.4)';
+  };
+
+  const resetView = () => {
+    if (globeRef.current) {
+      globeRef.current.pointOfView({ lat: 20, lng: 0, altitude: 2.5 }, 1000);
+      setIsRotating(true);
+    }
+  };
+
+  const handlePointClick = (event: any) => {
+    const matched = events.find((e) => e.event_id === event.event_id);
+    if (matched) {
+      onSelectEvent(matched);
+    }
+  };
+
+  const renderTooltip = (ev: EarthquakeEvent): string => {
+    const color = getMarkerColor(ev.magnitude);
+    return `
+      <div style="background: rgba(15, 23, 42, 0.95); border: 1px solid #334155; border-radius: 8px; padding: 10px 14px; font-family: sans-serif; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.5); min-width: 220px; color: #f8fafc;">
+        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #334155; padding-bottom: 6px; margin-bottom: 6px;">
+          <span style="font-family: monospace; font-size: 11px; font-weight: bold; color: #38bdf8;">${ev.event_id}</span>
+          <span style="background: ${color}; color: #0f172a; font-weight: 800; font-size: 11px; padding: 2px 6px; border-radius: 4px;">
+            M ${Number(ev.magnitude).toFixed(1)} (${ev.magnitude_class})
+          </span>
+        </div>
+        <div style="font-size: 12px; font-weight: 600; margin-bottom: 4px; color: #e2e8f0;">${ev.place}</div>
+        <div style="font-size: 11px; color: #94a3b8; display: grid; grid-template-columns: 1fr 1fr; gap: 4px;">
+          <div>Profundidad: <b style="color: #cbd5e1;">${Number(ev.depth_km).toFixed(1)} km</b></div>
+          <div>Radio PGA: <b style="color: #38bdf8;">${Number(ev.impact_radius_km || 0).toFixed(0)} km</b></div>
+        </div>
+        ${
+          ev.tsunami_alert
+            ? '<div style="margin-top: 6px; background: rgba(239, 68, 68, 0.2); border: 1px solid #ef4444; color: #fca5a5; font-size: 10px; font-weight: bold; padding: 2px 6px; border-radius: 4px; text-align: center;">⚠️ ALERTA DE TSUNAMI EMITIDA</div>'
+            : ''
+        }
+      </div>
+    `;
+  };
+
+  return (
+    <div ref={containerRef} className="relative w-full h-full min-h-[550px] overflow-hidden bg-slate-950 select-none">
+      <Globe
+        ref={globeRef}
+        width={dimensions.width}
+        height={dimensions.height}
+        backgroundColor="#020617"
+        globeImageUrl="//unpkg.com/three-globe/example/img/earth-night.jpg"
+        bumpImageUrl="//unpkg.com/three-globe/example/img/earth-topology.png"
+        showAtmosphere={true}
+        atmosphereColor="#38bdf8"
+        atmosphereAltitude={0.16}
+        // Points Layer: Earthquake Epicenters
+        pointsData={events}
+        pointLat={(d: any) => d.latitude}
+        pointLng={(d: any) => d.longitude}
+        pointAltitude={(d: any) => Math.max(0.015, (d.magnitude / 10) * 0.12)}
+        pointRadius={(d: any) => Math.max(0.35, d.magnitude * 0.25)}
+        pointColor={(d: any) => getMarkerColor(d.magnitude)}
+        pointLabel={(d: any) => renderTooltip(d)}
+        onPointClick={handlePointClick}
+        // Concentric Rings Layer: Physical PGA Impact Wave
+        ringsData={events}
+        ringLat={(d: any) => d.latitude}
+        ringLng={(d: any) => d.longitude}
+        ringColor={(d: any) => () => getRingColor(d.magnitude)}
+        ringMaxRadius={(d: any) => Math.max(1.8, Math.min(10, (d.impact_radius_km || 10) / 18))}
+        ringPropagationSpeed={(d: any) => Math.max(1.0, d.magnitude * 0.4)}
+        ringRepeatPeriod={1000}
+      />
+
+      {/* Cockpit Overlay: Top Controls */}
+      <div className="absolute top-4 left-4 z-20 flex items-center gap-2">
+        <button
+          onClick={resetView}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-900/80 hover:bg-slate-800/90 text-slate-300 hover:text-white border border-slate-700/80 backdrop-blur text-xs font-medium shadow-lg transition-colors"
+          title="Restablecer vista global"
+        >
+          <RotateCcw className="w-3.5 h-3.5 text-sky-400" />
+          Vista Global
+        </button>
+
+        <button
+          onClick={() => setIsRotating(!isRotating)}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border backdrop-blur text-xs font-medium shadow-lg transition-colors ${
+            isRotating
+              ? 'bg-sky-500/20 text-sky-300 border-sky-500/30'
+              : 'bg-slate-900/80 text-slate-400 border-slate-700/80 hover:text-white'
+          }`}
+          title="Alternar rotación automática"
+        >
+          <Compass className={`w-3.5 h-3.5 ${isRotating ? 'animate-spin' : ''}`} />
+          {isRotating ? 'Auto-Rotación: ON' : 'Auto-Rotación: OFF'}
+        </button>
+      </div>
+
+      {/* Cockpit Overlay: Magnitudes & PGA Legend */}
+      <div className="absolute bottom-4 left-4 z-20 bg-slate-900/90 backdrop-blur border border-slate-800 rounded-xl p-3 text-xs shadow-2xl space-y-2 pointer-events-auto">
+        <div className="flex items-center gap-1.5 font-semibold text-slate-200 border-b border-slate-800 pb-1.5">
+          <Waves className="w-4 h-4 text-sky-400" />
+          <span>Telemetría Sísmica 3D (PGA)</span>
+        </div>
+        <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-[11px]">
+          <div className="flex items-center gap-2">
+            <span className="w-2.5 h-2.5 rounded-full bg-rose-500 shadow-sm shadow-rose-500/50"></span>
+            <span className="text-slate-300">M ≥ 5.0 (Fuerte)</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="w-2.5 h-2.5 rounded-full bg-amber-400 shadow-sm shadow-amber-400/50"></span>
+            <span className="text-slate-300">M 4.0 - 4.9</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 shadow-sm shadow-emerald-400/50"></span>
+            <span className="text-slate-300">M 2.5 - 3.9</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="w-2.5 h-2.5 rounded-full bg-sky-400 shadow-sm shadow-sky-400/50"></span>
+            <span className="text-slate-300">M &lt; 2.5</span>
+          </div>
+        </div>
+        <div className="text-[10px] text-sky-400 font-mono border-t border-slate-800 pt-1">
+          ◎ Ondas expansivas = Radio PGA (R_impact en km)
+        </div>
+      </div>
+    </div>
+  );
+};

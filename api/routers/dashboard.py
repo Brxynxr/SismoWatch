@@ -38,7 +38,7 @@ def get_region_stats(current_user: UserPayload = Depends(get_current_user)):
     """Returns top active regions from curated.v_region_activity."""
     with get_api_reader_conn() as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            cur.execute("SELECT region, event_count, max_magnitude, avg_magnitude FROM curated.v_region_activity ORDER BY event_count DESC LIMIT 10;")
+            cur.execute("SELECT region_name AS region, total_events AS event_count, max_magnitude, avg_magnitude FROM curated.v_region_activity ORDER BY total_events DESC LIMIT 10;")
             rows = cur.fetchall()
             return [dict(r) for r in rows]
 

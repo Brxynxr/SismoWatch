@@ -5,6 +5,8 @@ import { SeismicMap } from './components/SeismicMap';
 import { ChartsView } from './components/ChartsView';
 import { EventsCatalog } from './components/EventsCatalog';
 import { ChatAssistant } from './components/ChatAssistant';
+import { FloatingChatAssistant } from './components/FloatingChatAssistant';
+import { CockpitDashboard } from './components/CockpitDashboard';
 import { ReportsView } from './components/ReportsView';
 import { QuarantineAdmin } from './components/QuarantineAdmin';
 import { LoginModal } from './components/LoginModal';
@@ -111,33 +113,15 @@ export const App: React.FC = () => {
         isLive={isLive}
       />
 
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+      <main className={`flex-1 w-full mx-auto ${currentTab === 'dashboard' ? 'max-w-[1750px] px-3 sm:px-4 py-3' : 'max-w-7xl px-4 sm:px-6 lg:px-8 py-6'}`}>
         {currentTab === 'dashboard' && (
-          <div className="space-y-6">
-            {/* KPI Cards */}
-            <KPICards kpis={kpis} />
-
-            {/* Seismic Map (Differentiator #1: PGA Impact Radius circles) */}
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <h2 className="text-sm font-bold text-slate-300 flex items-center gap-2">
-                  <Activity className="w-4 h-4 text-sky-400" />
-                  Mapa Interactivo Global de Sismos & Radios de Afectación PGA
-                </h2>
-                <span className="text-xs text-slate-500">
-                  {events.length} sismos recientes graficados
-                </span>
-              </div>
-              <SeismicMap events={events} />
-            </div>
-
-            {/* Recharts Temporal and Distribution Analytics */}
-            <ChartsView
-              hourlyStats={hourlyStats}
-              regionStats={regionStats}
-              magnitudeStats={magnitudeStats}
-            />
-          </div>
+          <CockpitDashboard
+            events={events}
+            kpis={kpis}
+            hourlyStats={hourlyStats}
+            regionStats={regionStats}
+            magnitudeStats={magnitudeStats}
+          />
         )}
 
         {currentTab === 'catalog' && <EventsCatalog />}
@@ -149,9 +133,12 @@ export const App: React.FC = () => {
         {currentTab === 'quarantine' && user.role === 'admin' && <QuarantineAdmin />}
       </main>
 
+      {/* Floating Grounded AI Assistant (Persistent Access across the Platform) */}
+      <FloatingChatAssistant />
+
       {/* Footer */}
-      <footer className="border-t border-slate-800 bg-slate-950 py-4 text-center text-xs text-slate-500">
-        <p>SismoWatch • Arquitectura Medallion (Bronze/Silver/Gold) • POLP PostgreSQL • Local LLM Grounding</p>
+      <footer className="border-t border-slate-800 bg-slate-950 py-3 text-center text-xs text-slate-500">
+        <p>SismoWatch • Centro de Monitoreo 3D WebGL • Arquitectura Medallion • POLP PostgreSQL • Grounded LLM</p>
       </footer>
     </div>
   );
