@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Bot, User as UserIcon, ShieldCheck, Terminal, Sparkles, Cpu, Cloud, ChevronDown, ChevronUp } from 'lucide-react';
+import { Send, Bot, User as UserIcon, ShieldCheck, Terminal, Sparkles, Cpu, Cloud, ChevronDown, ChevronUp, Mic, MicOff } from 'lucide-react';
 import { ChatMessage } from '../types';
 import { api } from '../services/api';
 
@@ -16,6 +16,37 @@ export const ChatAssistant: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [provider, setProvider] = useState<'local' | 'cloud'>('cloud');
   const [expandedSqlId, setExpandedSqlId] = useState<string | null>(null);
+  const [isListening, setIsListening] = useState(false);
+
+  const toggleVoiceInput = () => {
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      alert("Tu navegador no soporta reconocimiento de voz nativo.");
+      return;
+    }
+    if (isListening) {
+      setIsListening(false);
+      return;
+    }
+    try {
+      const recognition = new SpeechRecognition();
+      recognition.lang = 'es-ES';
+      recognition.continuous = false;
+      recognition.interimResults = false;
+      recognition.onstart = () => setIsListening(true);
+      recognition.onend = () => setIsListening(false);
+      recognition.onerror = () => setIsListening(false);
+      recognition.onresult = (event: any) => {
+        const transcript = event.results[0][0].transcript;
+        if (transcript) {
+          setInput(transcript);
+        }
+      };
+      recognition.start();
+    } catch {
+      setIsListening(false);
+    }
+  };
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -244,6 +275,18 @@ export const ChatAssistant: React.FC = () => {
           disabled={loading}
           className="flex-1 bg-slate-900 border border-slate-800 rounded-lg px-4 py-2 text-xs sm:text-sm text-white placeholder-slate-500 focus:outline-none focus:border-sky-500"
         />
+        <button
+          type="button"
+          onClick={toggleVoiceInput}
+          title={isListening ? "Detener dictado por voz" : "Dictar pregunta por voz (Español)"}
+          className={`p-2.5 rounded-lg border transition-all flex items-center justify-center ${
+            isListening
+              ? 'bg-rose-500/20 border-rose-500 text-rose-400 animate-pulse'
+              : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-white hover:border-slate-700'
+          }`}
+        >
+          {isListening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+        </button>
         <button
           type="submit"
           disabled={loading || !input.trim()}

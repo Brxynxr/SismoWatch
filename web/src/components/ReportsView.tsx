@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { FileText, Sparkles, RefreshCw, Calendar, Globe, AlertCircle, Shield } from 'lucide-react';
+import { FileText, Sparkles, RefreshCw, Calendar, Globe, AlertCircle, Shield, Printer } from 'lucide-react';
 import { AIReport, User } from '../types';
 import { api } from '../services/api';
 
@@ -63,16 +63,29 @@ export const ReportsView: React.FC<ReportsViewProps> = ({ user }) => {
           </p>
         </div>
 
-        {user?.role === 'admin' && (
-          <button
-            onClick={handleRegenerate}
-            disabled={regenerating}
-            className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold bg-sky-600 hover:bg-sky-500 disabled:opacity-50 text-white transition-colors"
-          >
-            <RefreshCw className={`w-4 h-4 ${regenerating ? 'animate-spin' : ''}`} />
-            Regenerar Reporte Hoy (Admin)
-          </button>
-        )}
+        <div className="flex items-center gap-2">
+          {latestReport && (
+            <button
+              onClick={() => window.print()}
+              className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition-colors"
+              title="Descargar o imprimir reporte en PDF"
+            >
+              <Printer className="w-4 h-4 text-sky-400" />
+              Exportar a PDF
+            </button>
+          )}
+
+          {user?.role === 'admin' && (
+            <button
+              onClick={handleRegenerate}
+              disabled={regenerating}
+              className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold bg-sky-600 hover:bg-sky-500 disabled:opacity-50 text-white transition-colors"
+            >
+              <RefreshCw className={`w-4 h-4 ${regenerating ? 'animate-spin' : ''}`} />
+              Regenerar Reporte Hoy (Admin)
+            </button>
+          )}
+        </div>
       </div>
 
       {msg && (
