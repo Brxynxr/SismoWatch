@@ -104,6 +104,7 @@ def ask_chat_agent(
             )
 
         # Step 3: Execute query under role_chat_reader (with self-correction fallback)
+        is_fallback = False
         try:
             sql_results, db_latency = execute_chat_sql(sql)
         except Exception as sql_err:
@@ -113,10 +114,12 @@ def ask_chat_agent(
                 sql = generate_sql_for_question(correction_prompt, provider=req.provider)
                 is_valid, _ = validate_sql_query(sql)
                 if not is_valid:
+                    is_fallback = True
                     sql = "SELECT event_id, magnitude, region, place, event_time, depth_km, tsunami_alert FROM curated.v_events_chat ORDER BY magnitude DESC LIMIT 10;"
                 sql_results, db_latency = execute_chat_sql(sql)
             except Exception as retry_err:
                 logger.warning("Self-correction failed: %s. Using safe fallback query.", retry_err)
+                is_fallback = True
                 sql = "SELECT event_id, magnitude, region, place, event_time, depth_km, tsunami_alert FROM curated.v_events_chat ORDER BY magnitude DESC LIMIT 10;"
                 sql_results, db_latency = execute_chat_sql(sql)
 
@@ -124,15 +127,17 @@ def ask_chat_agent(
         reply = generate_grounded_answer(req.message, sql, sql_results, history=history_dicts, provider=req.provider)
 
         total_latency = time.time() - start_time
+        total_tokens = int((len(req.message) + len(sql) + len(reply)) / 4.0) + 50
+        proof_verified = (not is_fallback) and len(sql_results) > 0
 
         # Step 5: Audit log
         log_ai_run(
             run_type="chat_query",
             prompt=req.message,
             model_used=model_name,
-            tokens=len(req.message.split()) * 3 + len(sql.split()) + len(reply.split()),
+            tokens=total_tokens,
             latency=total_latency,
-            status_str="success"
+            status_str="success" if not is_fallback else "fallback"
         )
 
         return ChatResponse(
@@ -140,7 +145,7 @@ def ask_chat_agent(
             sql_query=sql,
             sql_results=sql_results,
             proof_of_grounding=ProofOfGrounding(
-                verified=True,
+                verified=proof_verified,
                 rows_retrieved=len(sql_results)
             ),
             model_used=model_name,

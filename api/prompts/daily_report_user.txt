@@ -1,0 +1,9 @@
+Métricas oficiales calculadas para el informe del {report_date}:
+- Total de sismos registrados: {total_events}
+- Magnitud máxima registrada: {max_magnitude}
+- Magnitud promedio: {avg_magnitude}
+- Alertas de tsunami: {tsunami_alerts}
+- Regiones más activas: {regions_affected}
+- Anomalías estadísticas detectadas: {anomalies_count}
+
+Genera el informe ejecutivo en español con un resumen técnico rigurosamente respaldado por estos datos.

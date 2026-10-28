@@ -85,14 +85,14 @@ def trigger_report_regeneration(
                 "state": run_data.get("state")
             }
         else:
-            # Fallback if DAG is not yet scheduled or running
-            return {
-                "message": "Solicitud de reporte registrada.",
-                "status": f"Airflow status {res.status_code}"
-            }
+            logger.error("Airflow trigger failed with status %d: %s", res.status_code, res.text)
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=f"Fallo al disparar DAG en Airflow (status {res.status_code}): {res.text}"
+            )
     except requests.exceptions.RequestException as e:
-        logger.warning("Airflow unreachable: %s", e)
-        return {
-            "message": "Solicitud registrada pero Airflow no respondió inmediatamente.",
-            "error": str(e)
-        }
+        logger.error("Airflow unreachable during trigger: %s", e)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Orquestador Airflow no disponible: {str(e)}"
+        )

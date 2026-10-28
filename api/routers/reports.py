@@ -41,6 +41,14 @@ def list_reports(
                 })
             return results
 
+@router.get("/list", response_model=List[Dict[str, Any]])
+def list_reports_alias(
+    limit: int = Query(20, ge=1, le=100),
+    current_user: UserPayload = Depends(get_current_user)
+):
+    """Alias compatible para listado paginado de reportes."""
+    return list_reports(limit=limit, current_user=current_user)
+
 @router.get("/latest", response_model=Dict[str, Any])
 def get_latest_report(current_user: UserPayload = Depends(get_current_user)):
     """Obtiene el reporte ejecutivo más reciente."""

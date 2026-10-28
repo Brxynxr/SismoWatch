@@ -1,3 +1,4 @@
+import os
 import re
 import time
 import json
@@ -10,6 +11,27 @@ from db import get_chat_reader_conn, get_api_logger_conn
 
 logger = logging.getLogger("sismowatch.api.ai")
 
+PROMPTS_DIR = os.path.join(os.path.dirname(__file__), "..", "prompts")
+
+def load_prompt_template(filename: str, default_content: str) -> str:
+    path = os.path.join(PROMPTS_DIR, filename)
+    if os.path.exists(path):
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                return f.read().strip()
+        except Exception as e:
+            logger.warning("Failed to load prompt template from %s: %s", path, e)
+    return default_content.strip()
+
+def sanitize_input_text(text: Any, max_chars: int = 500) -> str:
+    """Sanitizes external user/feed text to avoid prompt injection."""
+    if not text:
+        return ""
+    cleaned = re.sub(r"[\r\n]+", " ", str(text))
+    cleaned = re.sub(r"[{}\[\]<>]", "", cleaned)
+    cleaned = re.sub(r"(?i)(ignore previous instructions|system prompt|assistant:)", "", cleaned)
+    return cleaned[:max_chars].strip()
+
 SQL_GUARDRAIL_PATTERN = re.compile(
     r"\b(INSERT|UPDATE|DELETE|DROP|ALTER|CREATE|TRUNCATE|GRANT|REVOKE|COPY|EXEC|EXECUTE)\b",
     re.IGNORECASE
@@ -20,7 +42,7 @@ Vista de solo lectura permitida: curated.v_events_chat
 Columnas disponibles (ÚNICAMENTE ESTAS):
 - event_id (TEXT): Identificador único del sismo.
 - magnitude (FLOAT): Magnitud en escala Richter/Momento.
-- magnitude_class (TEXT): 'Micro', 'Menor', 'Ligero', 'Moderado', 'Fuerte', 'Mayor', 'Gran Sismo'.
+- magnitude_class (TEXT): Valores exactos en inglés: 'Micro' (<2.0), 'Minor' (2.0-3.9), 'Light' (4.0-4.9), 'Moderate' (5.0-5.9), 'Strong' (6.0-6.9), 'Major' (7.0-7.9), 'Great' (>=8.0).
 - place (TEXT): Descripción del lugar (ej. '13 km N of Borrego Springs, CA').
 - region (TEXT): Región geográfica normalizada (ej. 'California', 'Chile', 'Alaska').
 - impact_radius_km (FLOAT): Radio estimado de afectación superficial en km.
@@ -149,7 +171,7 @@ def query_llm(prompt: str, system_prompt: str, provider: str = "local", max_toke
 
 def generate_sql_for_question(user_question: str, history: Optional[List[Dict[str, str]]] = None, provider: str = "local") -> str:
     """Uses LLM to translate natural language question to read-only SQL, taking conversation history into account."""
-    system_prompt = f"""Eres un Ingeniero de Datos experto en PostgreSQL para SismoWatch.
+    default_sys = f"""Eres un Ingeniero de Datos experto en PostgreSQL para SismoWatch.
 Tu tarea es traducir la pregunta del usuario a UNA sentencia SQL de solo lectura sobre la vista curated.v_events_chat.
 
 {V_EVENTS_CHAT_SCHEMA}
@@ -162,18 +184,20 @@ REGLAS ESTRICTAS:
 5. Si hay historial previo de la conversación y la pregunta es de seguimiento (ej: '¿a qué profundidad fue?', '¿hubo tsunami en ese sismo?'), usa el contexto del historial para identificar a qué sismo o región se refiere la consulta.
 6. ÚNICAMENTE si la pregunta es explícitamente sobre temas ajenos (como fútbol, cocina, celebridades como Messi, chistes o política), responde: RECHAZO_FUERA_DE_DOMINIO
 """
+    system_prompt = load_prompt_template("chat_text_to_sql_system.txt", default_sys)
+    sanitized_q = sanitize_input_text(user_question)
+
     history_context = ""
     if history:
         recent_lines = []
         for h in history[-4:]:
             role_name = "Usuario" if h.get("role") == "user" else "Asistente"
-            recent_lines.append(f"{role_name}: {h.get('content', '')}")
+            recent_lines.append(f"{role_name}: {sanitize_input_text(h.get('content', ''))}")
         if recent_lines:
             history_context = "Historial reciente de la conversación:\n" + "\n".join(recent_lines) + "\n\n"
 
-    full_prompt = f"{history_context}Pregunta actual: {user_question}"
+    full_prompt = f"{history_context}Pregunta actual: {sanitized_q}"
     raw_response = query_llm(full_prompt, system_prompt, provider=provider, max_tokens=140)
-    # Strip markdown code fences if model included them
     cleaned = re.sub(r"```(sql)?", "", raw_response).strip()
     return cleaned
 
@@ -185,10 +209,9 @@ def generate_grounded_answer(
     provider: str = "local"
 ) -> str:
     """Uses LLM to summarize SQL results in Spanish with strict numerical grounding and professional visual layout."""
-    # Serialize results to readable JSON
     results_str = json.dumps(sql_results[:15], default=str, indent=2, ensure_ascii=False)
 
-    system_prompt = """Eres el Asistente Experto de SismoWatch para monitoreo sísmico en tiempo real.
+    default_sys = """Eres el Asistente Experto de SismoWatch para monitoreo sísmico en tiempo real.
 Tu misión es responder a la pregunta del usuario de manera natural, fluida, conversacional y profesional en español, explicando con claridad los resultados obtenidos de la base de datos.
 
 PAUTAS DE REDACCIÓN Y RIGOR CIENTÍFICO (CERO ALUCINACIONES):
@@ -201,16 +224,19 @@ PAUTAS DE REDACCIÓN Y RIGOR CIENTÍFICO (CERO ALUCINACIONES):
 5. Si la consulta devolvió 0 resultados, explica con amabilidad y naturalidad que tras consultar el catálogo curado no se registran eventos con esos criterios.
 6. No expongas sintaxis técnica de SQL ni bloques de código JSON crudo; entrega un reporte ejecutivo claro para el analista de riesgos.
 """
+    system_prompt = load_prompt_template("chat_grounded_answer_system.txt", default_sys)
+    sanitized_q = sanitize_input_text(user_question)
+
     history_context = ""
     if history:
         recent_lines = []
         for h in history[-3:]:
             role_name = "Usuario" if h.get("role") == "user" else "Asistente"
-            recent_lines.append(f"{role_name}: {h.get('content', '')}")
+            recent_lines.append(f"{role_name}: {sanitize_input_text(h.get('content', ''))}")
         if recent_lines:
             history_context = "Contexto previo:\n" + "\n".join(recent_lines) + "\n\n"
 
-    user_prompt = f"""{history_context}Pregunta del usuario: {user_question}
+    user_prompt = f"""{history_context}Pregunta del usuario: {sanitized_q}
 
 Consulta SQL ejecutada:
 {sql_query}

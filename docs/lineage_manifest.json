@@ -1,0 +1,55 @@
+{
+  "service": {
+    "name": "airflow_sismowatch",
+    "type": "Airflow",
+    "pipeline": "usgs_transform_quality"
+  },
+  "executionDate": "2026-10-28T07:00:00Z",
+  "nodes": [
+    {
+      "id": "raw.usgs_events",
+      "type": "table",
+      "schema": "raw",
+      "description": "Bronze layer: immutable append-only raw USGS feed"
+    },
+    {
+      "id": "staging.events",
+      "type": "table",
+      "schema": "staging",
+      "description": "Silver layer: clean and validated events"
+    },
+    {
+      "id": "staging.quarantine",
+      "type": "table",
+      "schema": "staging",
+      "description": "Silver layer: rejected events with validation failure reasons"
+    },
+    {
+      "id": "curated.earthquakes",
+      "type": "table",
+      "schema": "curated",
+      "description": "Gold layer: consolidated current state with derived metrics"
+    }
+  ],
+  "edges": [
+    {
+      "fromEntity": "raw.usgs_events",
+      "toEntity": "staging.events",
+      "pipeline": "usgs_transform_quality",
+      "description": "Pandera row-level validation filtering"
+    },
+    {
+      "fromEntity": "raw.usgs_events",
+      "toEntity": "staging.quarantine",
+      "pipeline": "usgs_transform_quality",
+      "description": "Routing of corrupted records to quarantine"
+    },
+    {
+      "fromEntity": "staging.events",
+      "toEntity": "curated.earthquakes",
+      "pipeline": "usgs_transform_quality",
+      "description": "Idempotent conditional upsert on event_id"
+    }
+  ],
+  "emittedAt": "2026-10-28T12:06:39.143243"
+}

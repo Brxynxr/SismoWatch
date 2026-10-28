@@ -119,6 +119,8 @@ CREATE TABLE IF NOT EXISTS curated.anomalies (
     detected_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+CREATE UNIQUE INDEX IF NOT EXISTS uq_anomalies_region_day ON curated.anomalies (region, time_window, metric_name, ((detected_at AT TIME ZONE 'UTC')::date));
+
 CREATE TABLE IF NOT EXISTS curated.ai_runs (
     run_id BIGSERIAL PRIMARY KEY,
     run_type VARCHAR(25) NOT NULL, -- 'daily_report', 'anomaly_detection', 'chat_query'
