@@ -37,7 +37,7 @@
 ## 3. Elementos Diferenciadores Clave
 
 1. **Radio de Impacto Superficial PGA (Peak Ground Acceleration):**
-   * Fórmula geofísica: $R = 10^{0.43 \cdot M - 0.005 \cdot h}$
+   * Fórmula geofísica: $R = 10^{0.45 \cdot M - 0.8}$ (con atenuación hipocentral para $h > 30\text{ km}$)
    * Proyectado en el mapa Leaflet como círculos concéntricos dinámicos con borde punteado alrededor de cada epicentro.
 2. **Proof of Grounding (Cero Alucinaciones):**
    * El LLM traduce la pregunta a SQL puro sobre `curated.v_events_chat`.

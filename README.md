@@ -40,7 +40,7 @@
 A diferencia de un dashboard convencional, SismoWatch implementa 3 elementos de ingeniería avanzada:
 
 1. **Radio de Afectación Superficial Físico (PGA - Peak Ground Acceleration):**  
-   Cálculo físico determinista del radio de afectación en kilómetros (`curated.earthquakes.impact_radius_km`) derivado de la magnitud y profundidad ($R = 10^{0.43 \cdot M - 0.005 \cdot h}$), graficado como círculos concéntricos dinámicos en el mapa Leaflet.
+   Cálculo físico determinista del radio de afectación en kilómetros (`curated.earthquakes.impact_radius_km`) derivado de la magnitud y profundidad mediante la ley de atenuación ($R = 10^{0.45 \cdot M - 0.8}$, con ajuste hipocentral $\sqrt{R^2 + h^2} - h$ para $h > 30\text{ km}$), graficado como círculos concéntricos dinámicos en el mapa.
 2. **Asistente Conversacional Grounded (Proof of Grounding):**  
    Cero alucinaciones numéricas. El agente traduce lenguaje natural a SQL de solo lectura sobre la vista restringida `curated.v_events_chat`, validado por un guardrail AST/regex y ejecutado bajo `role_chat_reader` (`read_only = on`, `timeout = 3000ms`). La UI expone la consulta SQL y la insignia de **Proof of Grounding** verificada.
 3. **SLA de Frescura y Circuit Breaker de Calidad:**  
