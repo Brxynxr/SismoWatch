@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { FileText, Sparkles, RefreshCw, Calendar, Globe, AlertCircle, Shield, Printer, CheckCircle } from 'lucide-react';
+import { FileText, Sparkles, RefreshCw, Calendar, Globe, AlertCircle, Shield, Printer, CheckCircle, Download } from 'lucide-react';
 import { AIReport, User } from '../types';
 import { api } from '../services/api';
 
@@ -93,6 +93,30 @@ export const ReportsView: React.FC<ReportsViewProps> = ({ user }) => {
     );
   };
 
+  const handleExportReportCSV = () => {
+    if (!latestReport) return;
+    const csvRows = [
+      ["Campo", "Valor"].join(","),
+      ["Fecha de Reporte", latestReport.report_date].join(","),
+      ["Título", `"${latestReport.title}"`].join(","),
+      ["Total Sismos 24h", latestReport.total_events].join(","),
+      ["Magnitud Máxima", latestReport.max_magnitude].join(","),
+      ["Magnitud Promedio", latestReport.avg_magnitude].join(","),
+      ["Alertas de Tsunami", latestReport.tsunami_alerts].join(","),
+      ["Regiones Afectadas", `"${(latestReport.regions_affected || []).join('; ')}"`].join(","),
+      ["Modelo de IA", latestReport.model_used].join(","),
+      ["Resumen Ejecutivo", `"${(latestReport.summary || '').replace(/"/g, '""')}"`].join(",")
+    ];
+    const blob = new Blob([csvRows.join("\n")], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.setAttribute("download", `reporte_ejecutivo_${latestReport.report_date}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   return (
     <div className="space-y-6">
       {/* Header with Admin trigger */}
@@ -109,14 +133,24 @@ export const ReportsView: React.FC<ReportsViewProps> = ({ user }) => {
 
         <div className="flex items-center gap-2">
           {latestReport && (
-            <button
-              onClick={() => window.print()}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition-colors shadow-sm"
-              title="Descargar o imprimir reporte en PDF"
-            >
-              <Printer className="w-3.5 h-3.5 text-sky-400" />
-              Exportar a PDF
-            </button>
+            <>
+              <button
+                onClick={handleExportReportCSV}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition-colors shadow-sm cursor-pointer"
+                title="Descargar reporte oficial en formato CSV"
+              >
+                <Download className="w-3.5 h-3.5 text-emerald-400" />
+                Descargar CSV
+              </button>
+              <button
+                onClick={() => window.print()}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition-colors shadow-sm cursor-pointer"
+                title="Descargar o imprimir reporte en PDF"
+              >
+                <Printer className="w-3.5 h-3.5 text-sky-400" />
+                Exportar a PDF
+              </button>
+            </>
           )}
 
           {user?.role === 'admin' && (

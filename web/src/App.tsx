@@ -25,6 +25,7 @@ export const App: React.FC = () => {
   const [regionStats, setRegionStats] = useState<RegionStat[]>([]);
   const [magnitudeStats, setMagnitudeStats] = useState<MagnitudeStat[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
+  const [error, setError] = useState<string | null>(null);
 
   // Dedicated independent Analytics state
   const [analyticsRange, setAnalyticsRange] = useState<string>('24h');
@@ -40,17 +41,18 @@ export const App: React.FC = () => {
     setAnalyticsLoading(true);
     try {
       const [kpisData, hourlyData, regionsData, magsData] = await Promise.all([
-        api.getKPIs(range).catch(() => null),
-        api.getHourlyStats(range).catch(() => []),
-        api.getRegionStats(range).catch(() => []),
-        api.getMagnitudeDistribution(range).catch(() => [])
+        api.getKPIs(range),
+        api.getHourlyStats(range),
+        api.getRegionStats(range),
+        api.getMagnitudeDistribution(range)
       ]);
       if (kpisData) setAnalyticsKPIs(kpisData);
-      setAnalyticsHourly(hourlyData);
-      setAnalyticsRegions(regionsData);
-      setAnalyticsMagnitudes(magsData);
-    } catch (err) {
+      setAnalyticsHourly(hourlyData || []);
+      setAnalyticsRegions(regionsData || []);
+      setAnalyticsMagnitudes(magsData || []);
+    } catch (err: any) {
       console.error("Error loading analytics data:", err);
+      setError(err?.message || "Error al actualizar las métricas de analítica");
     } finally {
       setAnalyticsLoading(false);
     }
@@ -59,13 +61,14 @@ export const App: React.FC = () => {
   const loadInitialData = async () => {
     if (!user) return;
     setLoading(true);
+    setError(null);
     try {
       const [kpisData, eventsData, hourlyData, regionsData, magsData] = await Promise.all([
-        api.getKPIs('24h').catch(() => null),
-        api.getEvents({ page_size: 200, time_range: '24h' }).catch(() => ({ items: [] })),
-        api.getHourlyStats('24h').catch(() => []),
-        api.getRegionStats('24h').catch(() => []),
-        api.getMagnitudeDistribution('24h').catch(() => [])
+        api.getKPIs('24h'),
+        api.getEvents({ page_size: 200, time_range: '24h' }),
+        api.getHourlyStats('24h'),
+        api.getRegionStats('24h'),
+        api.getMagnitudeDistribution('24h')
       ]);
 
       if (kpisData) {
@@ -73,14 +76,15 @@ export const App: React.FC = () => {
         setAnalyticsKPIs(kpisData);
       }
       if (eventsData?.items) setEvents(eventsData.items);
-      setHourlyStats(hourlyData);
-      setAnalyticsHourly(hourlyData);
-      setRegionStats(regionsData);
-      setAnalyticsRegions(regionsData);
-      setMagnitudeStats(magsData);
-      setAnalyticsMagnitudes(magsData);
-    } catch (err) {
+      setHourlyStats(hourlyData || []);
+      setAnalyticsHourly(hourlyData || []);
+      setRegionStats(regionsData || []);
+      setAnalyticsRegions(regionsData || []);
+      setMagnitudeStats(magsData || []);
+      setAnalyticsMagnitudes(magsData || []);
+    } catch (err: any) {
       console.error("Error loading dashboard data:", err);
+      setError(err?.message || "No se pudo sincronizar la telemetría sísmica.");
     } finally {
       setLoading(false);
     }
@@ -300,6 +304,29 @@ export const App: React.FC = () => {
             {currentTab === 'quarantine' && user.role === 'admin' && <QuarantineAdmin />}
           </div>
         </aside>
+      )}
+
+      {/* Global Error Banner */}
+      {error && (
+        <div className="absolute top-4 right-4 z-50 flex items-center gap-3 px-4 py-3 rounded-xl bg-rose-950/90 border border-rose-800 text-rose-200 shadow-2xl backdrop-blur-xl animate-in fade-in slide-in-from-top-2">
+          <AlertTriangle className="w-5 h-5 text-rose-400 shrink-0" />
+          <div className="text-xs">
+            <span className="font-bold block text-white">Alerta de Sincronización</span>
+            <span>{error}</span>
+          </div>
+          <button
+            onClick={() => loadInitialData()}
+            className="ml-2 px-2.5 py-1 rounded-lg bg-rose-800 hover:bg-rose-700 text-white font-bold text-xs transition-colors cursor-pointer"
+          >
+            Reintentar
+          </button>
+          <button
+            onClick={() => setError(null)}
+            className="p-1 rounded text-rose-400 hover:text-white cursor-pointer"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
       )}
 
       {/* 3. Main Center Cockpit Viewport (Always Active 3D Globe & Live Telemetry) */}
