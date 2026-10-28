@@ -133,3 +133,32 @@ def test_sql_guardrail_validator():
     is_valid, reason = validate_sql_query(raw_query)
     assert is_valid is False
     assert "v_events_chat" in reason
+
+def test_stream_unauthenticated_rejected():
+    """SSE stream must reject unauthenticated requests with 401."""
+    res = client.get("/api/stream")
+    assert res.status_code == 401
+    assert "Token de acceso requerido" in res.json()["detail"]
+
+    # Invalid token also rejected
+    res_bad = client.get("/api/stream?token=invalid.token.payload")
+    assert res_bad.status_code == 401
+
+def test_pipeline_status_and_anomalies_endpoints():
+    """Validates /api/pipeline/status and /api/anomalies return 200 with real schema."""
+    login_res = client.post("/auth/login", json={"username": settings.VIEWER_USERNAME, "password": settings.VIEWER_PASSWORD})
+    token = login_res.json()["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # Pipeline status
+    status_res = client.get("/api/pipeline/status", headers=headers)
+    assert status_res.status_code == 200
+    st_data = status_res.json()
+    assert "status" in st_data
+    assert "latest_quality_score" in st_data
+    assert "recent_quality_runs" in st_data
+
+    # Anomalies
+    anom_res = client.get("/api/anomalies", headers=headers)
+    assert anom_res.status_code == 200
+    assert isinstance(anom_res.json(), list)

@@ -11,6 +11,8 @@ export interface KPIs {
   tsunami_alerts_24h: number;
   latest_event_time: string | null;
   reviewed_events_24h: number;
+  quality_score?: number;
+  last_quality_update?: string | null;
 }
 
 export interface EarthquakeEvent {

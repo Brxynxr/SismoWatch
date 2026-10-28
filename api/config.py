@@ -7,7 +7,12 @@ class Settings(BaseSettings):
     APP_NAME: str = "SismoWatch API"
     APP_VERSION: str = "1.0.0"
     DEBUG: bool = False
-    CORS_ORIGINS: List[str] = ["http://localhost:3000", "http://127.0.0.1:3000", "*"]
+    CORS_ORIGINS: List[str] = [
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "http://localhost:5173",
+        "http://127.0.0.1:5173"
+    ]
 
     # Database
     DB_HOST: str = os.getenv("POSTGRES_HOST", "localhost")

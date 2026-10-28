@@ -14,15 +14,29 @@ logger = logging.getLogger("sismowatch.api.stream")
 router = APIRouter(prefix="/api", tags=["Streaming en Tiempo Real"])
 
 def _verify_sse_token(token: Optional[str]) -> str:
-    """Validates token from query param or throws 401."""
+    """Validates token from query param or throws 401 Unauthorized."""
     if not token:
-        # For public/viewer dashboard stream, allow if token is optional, or validate if provided
-        return "viewer"
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token de acceso requerido para el stream en tiempo real.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
     try:
         payload = jwt.decode(token, settings.JWT_SECRET_KEY, algorithms=[settings.JWT_ALGORITHM])
-        return payload.get("role", "viewer")
+        role = payload.get("role")
+        if not role:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Token inválido: rol no especificado.",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        return role
     except JWTError:
-        return "viewer"
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token de acceso inválido o expirado.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
 
 @router.get("/stream")
 async def event_stream(token: Optional[str] = Query(None)):
@@ -77,8 +91,8 @@ async def event_stream(token: Optional[str] = Query(None)):
                         yield f"event: seismic_update\ndata: {json.dumps(payload, default=str)}\n\n"
 
             except Exception as e:
-                logger.warning("Error reading DB for SSE stream: %s", e)
-                yield f"event: error\ndata: {json.dumps({'error': str(e)})}\n\n"
+                logger.error("Error reading DB for SSE stream: %s", e)
+                yield f"event: error\ndata: {json.dumps({'error': 'Error interno al consultar métricas sísmicas'})}\n\n"
 
             await asyncio.sleep(5)
 

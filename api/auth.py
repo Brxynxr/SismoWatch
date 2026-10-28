@@ -23,14 +23,26 @@ class TokenResponse(BaseModel):
     role: str
     username: str
 
+import hmac
+import secrets
+
+def _verify_password(plain_password: str, stored_password_or_hash: str) -> bool:
+    """Safely verifies password preventing timing attacks and supporting bcrypt hashes."""
+    if stored_password_or_hash.startswith(("$2a$", "$2b$", "$2y$")):
+        try:
+            return pwd_context.verify(plain_password, stored_password_or_hash)
+        except Exception:
+            return False
+    return secrets.compare_digest(plain_password.encode("utf-8"), stored_password_or_hash.encode("utf-8"))
+
 def verify_credentials(username: str, password: str) -> Optional[UserPayload]:
     """
     Validates user credentials against configured users.
     No secrets stored in database (Zero Secrets & Stateless).
     """
-    if username == settings.ADMIN_USERNAME and password == settings.ADMIN_PASSWORD:
+    if secrets.compare_digest(username, settings.ADMIN_USERNAME) and _verify_password(password, settings.ADMIN_PASSWORD):
         return UserPayload(username=username, role="admin")
-    if username == settings.VIEWER_USERNAME and password == settings.VIEWER_PASSWORD:
+    if secrets.compare_digest(username, settings.VIEWER_USERNAME) and _verify_password(password, settings.VIEWER_PASSWORD):
         return UserPayload(username=username, role="viewer")
     return None
 

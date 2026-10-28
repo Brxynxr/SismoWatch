@@ -7,12 +7,14 @@ import { EventsCatalog } from './components/EventsCatalog';
 import { ReportsView } from './components/ReportsView';
 import { QuarantineAdmin } from './components/QuarantineAdmin';
 import { FloatingChatAssistant } from './components/FloatingChatAssistant';
+import { LoginModal } from './components/LoginModal';
 import { User, KPIs, EarthquakeEvent, HourlyStat, RegionStat, MagnitudeStat } from './types';
 import { api, getStoredUser } from './services/api';
 import { Database, FileText, AlertTriangle, X, BarChart3, RefreshCw, Activity } from 'lucide-react';
 
 export const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(getStoredUser());
+  const [showLoginModal, setShowLoginModal] = useState<boolean>(!getStoredUser());
   const [currentTab, setCurrentTab] = useState<string>('dashboard');
   const [isLive, setIsLive] = useState<boolean>(false);
 
@@ -84,21 +86,27 @@ export const App: React.FC = () => {
     }
   };
 
+  const handleLogout = () => {
+    api.logout();
+    setUser(null);
+    setShowLoginModal(true);
+    setIsLive(false);
+  };
+
+  const handleLoginSuccess = (loggedInUser: User) => {
+    setUser(loggedInUser);
+    setShowLoginModal(false);
+  };
+
   useEffect(() => {
-    const initAuth = async () => {
-      const stored = getStoredUser();
-      if (stored?.token) {
-        setUser(stored);
-      } else {
-        try {
-          const u = await api.login('admin', 'admin_sismowatch_2026_pwd');
-          setUser(u);
-        } catch (err) {
-          console.error("Auto-login error:", err);
-        }
-      }
-    };
-    initAuth();
+    const stored = getStoredUser();
+    if (stored?.token) {
+      setUser(stored);
+      setShowLoginModal(false);
+    } else {
+      setUser(null);
+      setShowLoginModal(true);
+    }
   }, []);
 
   useEffect(() => {
@@ -169,6 +177,8 @@ export const App: React.FC = () => {
         currentTab={currentTab}
         onSelectTab={(tab) => setCurrentTab(tab)}
         user={user}
+        onLogout={handleLogout}
+        onLoginClick={() => setShowLoginModal(true)}
         isLive={isLive}
       />
 
@@ -305,6 +315,11 @@ export const App: React.FC = () => {
 
       {/* 4. Floating Grounded AI Assistant (Minimalist Robot FAB) */}
       <FloatingChatAssistant />
+
+      {/* 5. RBAC Authentication Modal */}
+      {showLoginModal && (
+        <LoginModal onSuccess={handleLoginSuccess} />
+      )}
     </div>
   );
 };

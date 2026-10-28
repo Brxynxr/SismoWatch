@@ -47,6 +47,18 @@ def get_kpis(
                     WHERE event_time >= NOW() - (%s)::interval;
                 """, (interval_val,))
             row = cur.fetchone()
+            
+            # Fetch latest data quality metrics
+            cur.execute("""
+                SELECT quality_score, executed_at 
+                FROM curated.quality_runs 
+                ORDER BY executed_at DESC 
+                LIMIT 1;
+            """)
+            q_run = cur.fetchone()
+            quality_score = float(q_run["quality_score"]) if q_run and q_run.get("quality_score") is not None else 100.0
+            last_quality_update = q_run["executed_at"].isoformat() if q_run and q_run.get("executed_at") else None
+
             if not row or row["total_events_24h"] == 0:
                 return {
                     "total_events_24h": 0,
@@ -54,9 +66,14 @@ def get_kpis(
                     "avg_magnitude_24h": 0.0,
                     "tsunami_alerts_24h": 0,
                     "latest_event_time": None,
-                    "reviewed_events_24h": 0
+                    "reviewed_events_24h": 0,
+                    "quality_score": quality_score,
+                    "last_quality_update": last_quality_update
                 }
-            return dict(row)
+            res = dict(row)
+            res["quality_score"] = quality_score
+            res["last_quality_update"] = last_quality_update
+            return res
 
 @router.get("/stats/hourly", response_model=List[Dict[str, Any]])
 def get_hourly_stats(
@@ -206,13 +223,25 @@ def get_pipeline_status(current_user: UserPayload = Depends(get_current_user)):
     with get_api_reader_conn() as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute("""
-                SELECT run_id, dag_id, evaluated_rules, passed_rules, failed_rules, 
-                       quality_score, freshness_minutes, executed_at
+                SELECT run_id, execution_id, total_evaluated, total_passed, total_quarantined, 
+                       quality_score, freshness_latency_seconds, executed_at
                 FROM curated.quality_runs 
                 ORDER BY executed_at DESC 
                 LIMIT 5;
             """)
-            recent_runs = [dict(r) for r in cur.fetchall()]
+            raw_runs = cur.fetchall()
+            recent_runs = []
+            for r in raw_runs:
+                item = dict(r)
+                freshness_min = round((item.get("freshness_latency_seconds") or 0) / 60.0, 1)
+                item["freshness_minutes"] = freshness_min
+                item["evaluated_rules"] = item.get("total_evaluated", 0)
+                item["passed_rules"] = item.get("total_passed", 0)
+                item["failed_rules"] = item.get("total_quarantined", 0)
+                item["quality_score"] = float(item["quality_score"]) if item.get("quality_score") is not None else 100.0
+                if item.get("executed_at"):
+                    item["executed_at"] = item["executed_at"].isoformat()
+                recent_runs.append(item)
 
             # Quarantine count summary via curated.v_quarantine count (or 0 if empty)
             cur.execute("SELECT count(*) as total_quarantined FROM curated.v_quarantine;")
@@ -220,8 +249,8 @@ def get_pipeline_status(current_user: UserPayload = Depends(get_current_user)):
             total_quarantined = q_row["total_quarantined"] if q_row else 0
 
             latest_run = recent_runs[0] if recent_runs else None
-            quality_score = float(latest_run["quality_score"]) if latest_run and latest_run.get("quality_score") is not None else 100.0
-            freshness_min = float(latest_run["freshness_minutes"]) if latest_run and latest_run.get("freshness_minutes") is not None else 0.0
+            quality_score = latest_run["quality_score"] if latest_run else 100.0
+            freshness_min = latest_run["freshness_minutes"] if latest_run else 0.0
 
             return {
                 "status": "healthy" if quality_score >= 80.0 else "degraded",
@@ -230,3 +259,30 @@ def get_pipeline_status(current_user: UserPayload = Depends(get_current_user)):
                 "total_quarantined_records": total_quarantined,
                 "recent_quality_runs": recent_runs
             }
+
+@router.get("/anomalies", response_model=List[Dict[str, Any]])
+def get_detected_anomalies(
+    limit: int = Query(20, ge=1, le=100),
+    current_user: UserPayload = Depends(get_current_user)
+):
+    """Returns detected seismic anomalies from curated.anomalies."""
+    with get_api_reader_conn() as conn:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("""
+                SELECT anomaly_id, time_window, region, metric_name, metric_value, z_score, explanation, detected_at
+                FROM curated.anomalies
+                ORDER BY detected_at DESC
+                LIMIT %s;
+            """, (limit,))
+            rows = cur.fetchall()
+            results = []
+            for r in rows:
+                item = dict(r)
+                if item.get("detected_at"):
+                    item["detected_at"] = item["detected_at"].isoformat()
+                if item.get("metric_value") is not None:
+                    item["metric_value"] = float(item["metric_value"])
+                if item.get("z_score") is not None:
+                    item["z_score"] = float(item["z_score"])
+                results.append(item)
+            return results

@@ -49,6 +49,10 @@ export const api = {
     return user;
   },
 
+  logout: (): void => {
+    setStoredUser(null);
+  },
+
   getKPIs: async (range: string = '24h'): Promise<KPIs> => {
     const res = await fetch(`${API_BASE}/api/kpis?range=${range}`, { headers: authHeaders() });
     if (!res.ok) throw new Error('Error al cargar KPIs');

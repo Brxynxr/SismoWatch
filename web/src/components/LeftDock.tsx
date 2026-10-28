@@ -7,6 +7,8 @@ import {
   AlertTriangle,
   Radio,
   Activity,
+  LogOut,
+  LogIn,
 } from 'lucide-react';
 import { User } from '../types';
 
@@ -15,6 +17,7 @@ interface LeftDockProps {
   onSelectTab: (tab: string) => void;
   user: User | null;
   onLogout?: () => void;
+  onLoginClick?: () => void;
   isLive: boolean;
 }
 
@@ -22,6 +25,8 @@ export const LeftDock: React.FC<LeftDockProps> = ({
   currentTab,
   onSelectTab,
   user,
+  onLogout,
+  onLoginClick,
   isLive
 }) => {
   const navItems = [
@@ -122,8 +127,8 @@ export const LeftDock: React.FC<LeftDockProps> = ({
         })}
       </nav>
 
-      {/* Bottom Telemetry Controls */}
-      <div className="flex flex-col items-center gap-3 w-full px-2">
+      {/* Bottom Telemetry & Auth Controls */}
+      <div className="flex flex-col items-center gap-2.5 w-full px-2">
         {/* SSE Live Connection Dot */}
         <div
           title={isLive ? 'Conexión SSE en vivo activa' : 'Reconectando con backend...'}
@@ -143,6 +148,42 @@ export const LeftDock: React.FC<LeftDockProps> = ({
             {isLive ? 'SSE STREAM ACTIVO' : 'DESCONECTADO'}
           </div>
         </div>
+
+        {/* User Auth & Profile Action */}
+        {user ? (
+          <div className="relative group flex flex-col items-center">
+            <button
+              onClick={onLogout}
+              title={`Usuario: ${user.username} (${user.role}) - Clic para cerrar sesión`}
+              className={`flex items-center justify-center w-8 h-8 rounded-lg border transition-colors cursor-pointer ${
+                user.role === 'admin'
+                  ? 'bg-amber-500/10 text-amber-400 border-amber-500/30 hover:bg-rose-500/20 hover:text-rose-300 hover:border-rose-500/40'
+                  : 'bg-sky-500/10 text-sky-400 border-sky-500/30 hover:bg-rose-500/20 hover:text-rose-300 hover:border-rose-500/40'
+              }`}
+            >
+              <LogOut className="w-4 h-4" />
+            </button>
+            <div className="absolute left-full ml-3 top-1/2 -translate-y-1/2 hidden group-hover:flex flex-col whitespace-nowrap bg-slate-900/95 border border-slate-700 rounded-lg px-2.5 py-1.5 text-[11px] text-slate-200 shadow-xl pointer-events-none z-50">
+              <span className="font-bold text-white flex items-center gap-1">
+                {user.role === 'admin' ? '🛡️ Admin' : '👁️ Viewer'}: {user.username}
+              </span>
+              <span className="text-[10px] text-rose-400">Clic para cerrar sesión</span>
+            </div>
+          </div>
+        ) : (
+          <div className="relative group flex flex-col items-center">
+            <button
+              onClick={onLoginClick}
+              title="Iniciar Sesión (Viewer / Admin)"
+              className="flex items-center justify-center w-8 h-8 rounded-lg bg-sky-500/20 text-sky-300 border border-sky-500/40 hover:bg-sky-500/30 transition-colors cursor-pointer"
+            >
+              <LogIn className="w-4 h-4" />
+            </button>
+            <div className="absolute left-full ml-3 top-1/2 -translate-y-1/2 hidden group-hover:flex items-center whitespace-nowrap bg-slate-900/95 border border-slate-700 rounded-lg px-2.5 py-1 text-[11px] text-sky-300 shadow-xl pointer-events-none z-50">
+              Iniciar Sesión
+            </div>
+          </div>
+        )}
       </div>
     </aside>
   );

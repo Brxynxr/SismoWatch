@@ -4,10 +4,9 @@ title = "SismoWatch Gitleaks Configuration"
 useDefault = true
 
 [allowlist]
-description = "Ignore example env files and tests fixtures"
+description = "Ignore example env files, test fixtures, and web build assets"
 paths = [
   '''^\.env\.example$''',
   '''^tests/fixtures/.*''',
-  '''^PLAN\.md$''',
-  '''^docs/.*'''
+  '''^web/dist/.*'''
 ]

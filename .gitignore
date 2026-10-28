@@ -11,3 +11,4 @@ dist/
 *.pdf
 airflow/logs/
 *.zip
+docs/SUSTENTACION.md

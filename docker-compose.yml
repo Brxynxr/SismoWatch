@@ -6,7 +6,7 @@ x-airflow-common: &airflow-common
   environment: &airflow-common-env
     AIRFLOW__CORE__EXECUTOR: LocalExecutor
     AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres_master_secure_pwd_2026}@postgres:5432/airflow_db
-    AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW__CORE__FERNET_KEY:-fnYNhvG63iR6zOu-5-PcFZvQfSlcES1IQ6C1BTseu_w=}
+    AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW_FERNET_KEY:-${AIRFLOW__CORE__FERNET_KEY:-}}
     AIRFLOW__CORE__SECRET_KEY: ${AIRFLOW__CORE__SECRET_KEY:-sismowatch_web_secret_key_random_2026_xYz}
     AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
     AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: 'false'
