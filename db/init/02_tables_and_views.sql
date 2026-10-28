@@ -49,7 +49,8 @@ CREATE TABLE IF NOT EXISTS staging.quarantine (
     failed_rules TEXT[] NOT NULL,
     rejection_reason TEXT NOT NULL,
     payload JSONB NOT NULL,
-    quarantined_at TIMESTAMPTZ DEFAULT NOW()
+    quarantined_at TIMESTAMPTZ DEFAULT NOW(),
+    CONSTRAINT uq_quarantine_event_reason UNIQUE (event_id, rejection_reason)
 );
 
 CREATE INDEX IF NOT EXISTS idx_staging_quarantine_event ON staging.quarantine(event_id);

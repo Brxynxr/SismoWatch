@@ -66,20 +66,8 @@ def usgs_ingest_pipeline():
             events = data.get("features", [])
             logger.info("Fetched %d features directly from USGS API.", len(events))
         except Exception as err:
-            logger.warning("USGS Public API unavailable or rate-limited: %s. Activating Circuit Breaker fallback...", err)
-            # Circuit breaker fallback to local validated fixture
-            fixture_path = os.path.join(os.path.dirname(__file__), "..", "..", "tests", "fixtures", "sample_usgs_feed.json")
-            if not os.path.exists(fixture_path):
-                fixture_path = "/opt/airflow/tests/fixtures/sample_usgs_feed.json"
-                
-            if os.path.exists(fixture_path):
-                with open(fixture_path, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-                    events = data.get("features", [])
-                source_feed = "fallback_fixture.json"
-                logger.info("Circuit Breaker activated: Loaded %d events from local backup fixture.", len(events))
-            else:
-                raise RuntimeError(f"USGS API failed and backup fixture not found: {err}")
+            logger.error("USGS Public API unavailable or rate-limited: %s. Raising for Airflow retry...", err)
+            raise RuntimeError(f"USGS Public API request failed: {err}")
 
         # Ingestion into Bronze layer (PostgreSQL Hot Tier, append-only)
         inserted_count = insert_raw_events(events, source_feed=source_feed)

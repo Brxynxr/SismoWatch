@@ -42,6 +42,7 @@ def insert_raw_events(events: List[Dict[str, Any]], source_feed: str) -> int:
         return 0
 
     from include.transform import compute_payload_hash
+    from psycopg2.extras import execute_values
 
     records_to_insert = []
     for f in events:
@@ -53,30 +54,36 @@ def insert_raw_events(events: List[Dict[str, Any]], source_feed: str) -> int:
 
     sql = """
         INSERT INTO raw.usgs_events (event_id, payload, payload_hash, source_feed)
-        VALUES (%s, %s, %s, %s)
-        ON CONFLICT (event_id, payload_hash) DO NOTHING;
+        VALUES %s
+        ON CONFLICT (event_id, payload_hash) DO NOTHING
+        RETURNING id;
     """
     conn = get_ingestion_connection()
     try:
         cur = conn.cursor()
-        execute_batch(cur, sql, records_to_insert, page_size=100)
+        inserted_rows = execute_values(cur, sql, records_to_insert, fetch=True)
         conn.commit()
-        inserted_count = len(records_to_insert)
+        inserted_count = len(inserted_rows)
         cur.close()
-        logger.info("Successfully ingested %d raw events to raw.usgs_events.", inserted_count)
+        logger.info("Successfully ingested %d new raw events to raw.usgs_events (out of %d candidates).", inserted_count, len(records_to_insert))
         return inserted_count
     finally:
         conn.close()
 
 def fetch_latest_raw_events(limit: int = 500) -> List[Dict[str, Any]]:
     """
-    Fetches latest unprocessed or recently updated raw records using role_transformation.
+    Fetches latest unprocessed or recently updated raw records using role_transformation,
+    deduplicating by event_id so older versions in the batch window do not trigger false duplicates.
     """
     sql = """
-        SELECT id, event_id, payload
-        FROM raw.usgs_events
-        ORDER BY fetched_at DESC
-        LIMIT %s;
+        SELECT DISTINCT ON (event_id) id, event_id, payload
+        FROM (
+            SELECT id, event_id, payload, fetched_at
+            FROM raw.usgs_events
+            ORDER BY fetched_at DESC
+            LIMIT %s
+        ) sub
+        ORDER BY event_id, fetched_at DESC;
     """
     conn = get_transformation_connection()
     try:
@@ -103,11 +110,14 @@ def save_staging_and_curated(
     try:
         cur = conn.cursor()
 
-        # 1. Insert quarantined records
+        # 1. Insert quarantined records (idempotent upsert to avoid duplicate row explosion)
         if quarantined_records:
             sql_quar = """
                 INSERT INTO staging.quarantine (raw_id, event_id, failed_rules, rejection_reason, payload)
-                VALUES (%s, %s, %s, %s, %s);
+                VALUES (%s, %s, %s, %s, %s)
+                ON CONFLICT (event_id, rejection_reason) DO UPDATE SET
+                    quarantined_at = NOW(),
+                    raw_id = EXCLUDED.raw_id;
             """
             quar_data = [
                 (q["raw_id"], q["event_id"], q["failed_rules"], q["rejection_reason"], Json(q["payload"], dumps=lambda o: json.dumps(o, default=str)))
