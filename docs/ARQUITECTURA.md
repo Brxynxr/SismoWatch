@@ -138,27 +138,35 @@ erDiagram
     CURATED_QUALITY_RUNS {
         bigserial run_id PK
         varchar execution_id
-        integer total_records
-        integer passed_records
-        integer quarantined_records
+        integer total_evaluated
+        integer total_passed
+        integer total_quarantined
         numeric quality_score
-        numeric freshness_minutes
-        jsonb validation_summary
+        integer freshness_latency_seconds
         timestamptz executed_at
+    }
+
+    CURATED_ANOMALIES {
+        bigserial anomaly_id PK
+        varchar time_window
+        varchar region
+        varchar metric_name
+        numeric metric_value
+        numeric z_score
+        text explanation
+        timestamptz detected_at
     }
 
     CURATED_AI_RUNS {
         bigserial run_id PK
-        varchar task_type
+        varchar run_type
         varchar model_name
-        text prompt_template
-        jsonb input_data
-        text generated_text
-        numeric numeric_fidelity_score
-        boolean has_hallucinations
+        integer prompt_tokens_estimated
+        integer completion_tokens_estimated
         integer latency_ms
-        integer tokens_used
         numeric estimated_cost_usd
+        boolean success
+        text error_message
         timestamptz executed_at
     }
 
@@ -191,7 +199,7 @@ El sistema garantiza que ninguna credencial única tenga acceso ilimitado a la b
 | **Airflow Datasets (Data-Aware Scheduling)** | Consultas periódicas tipo cron en cada DAG | El DAG de transformación reacciona al instante exacto en que la ingesta finaliza con éxito (`Dataset("sismowatch://raw/usgs_events")`), eliminando esperas pasivas y sobrecarga innecesaria. | Requiere que ambos DAGs compartan el mismo URI semántico de Dataset. |
 | **Validación en Dos Niveles con Pandera (`lazy=True`)** | Pydantic fila por fila o Great Expectations | Pandera ejecuta validaciones vectorizadas de alto rendimiento sobre DataFrames. A nivel lote valida frescura y volumen (circuit breaker bloqueante); a nivel fila desvía los registros inválidos a `staging.quarantine` sin detener los datos limpios. | Mayor consumo de memoria temporal durante la validación del lote. |
 | **Proof of Grounding (Text-to-SQL + AST Guardrail)** | RAG Vectorial con Embeddings de texto | Los datos sísmicos son numéricos y tabulares. Los embeddings pierden precisión al realizar agregaciones numéricas exactas (ej. MAX, AVG, COUNT). Text-to-SQL sobre una vista restringida con timeout de 3s garantiza 100% de fidelidad numérica. | El modelo requiere comprender la estructura de la consulta SQL (mitigado con `qwen2.5-coder:1.5b` o Groq). |
-| **Server-Sent Events (SSE) con `fetch()` y `ReadableStream`** | WebSockets bidireccionales o Polling HTTP | El monitoreo sísmico requiere flujo unidireccional servidor $\rightarrow$ cliente. SSE funciona sobre HTTP estándar, atraviesa proxies y firewalls sin configuración especial y reconecta automáticamente. El uso de `ReadableStream` permite enviar el header `Authorization: Bearer <token>`. | No admite comunicación bidireccional en el mismo socket (el chat utiliza endpoints POST independientes). |
+| **Server-Sent Events (SSE) con `EventSource` y JWT Token** | WebSockets bidireccionales o Polling HTTP | El monitoreo sísmico requiere flujo unidireccional servidor $\rightarrow$ cliente en tiempo real. SSE opera sobre HTTP estándar, atraviesa proxies y reconecta automáticamente. La autenticación se verifica con JWT en query parameter (`/api/stream?token=...`) retornando HTTP 401 si es inválido o no existe. | No admite comunicación bidireccional en el mismo socket (el chat utiliza endpoints POST independientes). |
 
 ---
 

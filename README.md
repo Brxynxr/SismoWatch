@@ -8,7 +8,7 @@
 [![Ollama](https://img.shields.io/badge/Ollama-Local_Qwen2.5--Coder-000000?logo=ollama&logoColor=white)](https://ollama.ai/)
 [![Pandera](https://img.shields.io/badge/Data_Quality-Pandera_Lazy-FF6F00)](https://pandera.readthedocs.io/)
 [![Security](https://img.shields.io/badge/Security-Gitleaks_%26_Bandit_Passed-brightgreen)](https://github.com/gitleaks/gitleaks)
-[![Tests](https://img.shields.io/badge/Tests-40%2F40_Passing-success)]()
+[![Tests](https://img.shields.io/badge/Tests-46%2F46_Passing-success)]()
 
 **SismoWatch** es una plataforma de grado empresarial para la ingestión, auditoría de calidad, transformación analítica, enriquecimiento geofísico y explotación conversacional con IA de datos sísmicos mundiales en tiempo casi real desde el catálogo público de la **USGS (United States Geological Survey)**.
 
@@ -37,14 +37,18 @@
 
 ## 🎯 Elementos Diferenciadores del Proyecto
 
-A diferencia de un dashboard convencional, SismoWatch implementa 3 elementos de ingeniería avanzada:
+A diferencia de un dashboard convencional, SismoWatch implementa 5 elementos de ingeniería avanzada:
 
 1. **Radio de Afectación Superficial Físico (PGA - Peak Ground Acceleration):**  
    Cálculo físico determinista del radio de afectación en kilómetros (`curated.earthquakes.impact_radius_km`) derivado de la magnitud y profundidad mediante la ley de atenuación ($R = 10^{0.45 \cdot M - 0.8}$, con ajuste hipocentral $\sqrt{R^2 + h^2} - h$ para $h > 30\text{ km}$), graficado como círculos concéntricos dinámicos en el mapa.
 2. **Asistente Conversacional Grounded (Proof of Grounding):**  
    Cero alucinaciones numéricas. El agente traduce lenguaje natural a SQL de solo lectura sobre la vista restringida `curated.v_events_chat`, validado por un guardrail AST/regex y ejecutado bajo `role_chat_reader` (`read_only = on`, `timeout = 3000ms`). La UI expone la consulta SQL y la insignia de **Proof of Grounding** verificada.
 3. **SLA de Frescura y Circuit Breaker de Calidad:**  
-   Validación en dos niveles con Pandera. Nivel lote bloqueante (circuit breaker si la latencia del feed excede 120 min o hay volumen anómalo) y nivel fila (`lazy=True`) que enruta eventos corruptos a `staging.quarantine` sin detener los datos válidos.
+   Validación en dos niveles con Pandera. Nivel lote bloqueante (circuit breaker evaluando la marca temporal real del feed USGS y volumen anómalo) y nivel fila (`lazy=True`) que enruta eventos corruptos a `staging.quarantine` de forma idempotente sin detener los datos válidos.
+4. **Validación Numérica con Pydantic y Prompts Versionados:**  
+   Las cifras oficiales las calcula Python y SQL en la capa Gold; el LLM solo redacta sobre plantillas versionadas en `/prompts`. Un validador Pydantic contrasta las magnitudes y totales del texto con la telemetría real; si detecta divergencias, activa automáticamente el fallback determinista.
+5. **Seguridad Defensiva y Mínimo Privilegio (POLP/RBAC):**  
+   Streaming SSE (`/api/stream`) protegido con autenticación JWT obligatoria, endpoints de control y cuarentena restringidos a Admin (HTTP 403 para Viewer), contraseñas verificadas de forma segura y cero secretos hardcodeados en repositorio.
 
 ---
 
@@ -102,24 +106,31 @@ Banco de pruebas ejecutado con 8 consultas Text-to-SQL, 1 reporte ejecutivo y 2 
 
 ---
 
-## 🚀 Despliegue en Un Solo Comando
+## 🚀 Despliegue del Ecosistema
 
 ### Requisitos
 * Docker Engine 24+ y Docker Compose v2+
-* Python 3.11+
+* Python 3.11+ (o virtualenv `.venv` con dependencias)
+* Node.js 18+ (opcional para desarrollo web local)
 * Ollama corriendo en el host (`localhost:11434`) con el modelo `qwen2.5-coder:1.5b` (`ollama run qwen2.5-coder:1.5b`)
 
-### 1. Iniciar Todo el Ecosistema
+### 1. Iniciar Todo el Stack (Modo Completo con Lakehouse Parquet)
 ```bash
 docker compose up -d
+```
+
+### Alternativa: Iniciar Modo Liviano (Sin MinIO)
+Si deseas ejecutar la plataforma exclusivamente sobre la capa transaccional PostgreSQL y ahorrar memoria:
+```bash
+docker compose up -d postgres airflow-init airflow-webserver airflow-scheduler api web
 ```
 
 ### 2. Accesos Rápidos y Credenciales de Evaluación
 
 | Servicio | URL | Rol / Credenciales | Descripción |
 | :--- | :--- | :--- | :--- |
-| **Plataforma Web (React)** | http://localhost:3000 | `viewer` / `viewer_sismowatch_2026_pwd`<br>`admin` / `admin_sismowatch_2026_pwd` | Dashboard, Mapa PGA, Recharts, Catálogo CSV, Chat IA y Panel de Cuarentena. |
-| **API REST (FastAPI / Swagger)** | http://localhost:8000/docs | Autenticación Bearer JWT (`/auth/login`) | Endpoints Medallion, SSE Streaming (`/api/stream`) y Chat Grounded. |
+| **Plataforma Web (React)** | http://localhost:3000 | `viewer` / `viewer_sismowatch_2026_pwd`<br>`admin` / `admin_sismowatch_2026_pwd` | Dashboard 3D, Analítica, Recharts, Catálogo CSV, Chat IA y Cuarentena. |
+| **API REST (FastAPI / Swagger)** | http://localhost:8000/docs | Autenticación Bearer JWT (`/auth/login`) | Endpoints Medallion, SSE Streaming (`/api/stream?token=...`), Chat y Pipeline Status. |
 | **Apache Airflow 2.10** | http://localhost:8080 | `sismo_admin` / `sismo_admin_secure_pwd_2026` | Orquestador LocalExecutor con 4 DAGs activos y Datasets reactivos. |
 | **MinIO Object Storage (Console)** | http://localhost:9001 | `sismowatch_minio_admin` / `minio_sismowatch_2026_pwd` | Consola Web Data Lakehouse para explorar Parquets Medallion (`sismowatch-lake`). |
 | **MinIO S3 API** | http://localhost:9000 | Credenciales S3 v4 | Endpoint de almacenamiento de objetos compatible con AWS S3. |
@@ -131,27 +142,28 @@ docker compose up -d
 
 ## 🧪 Verificación y Pruebas Automatizadas
 
-El proyecto cuenta con **40 pruebas unitarias y de integración** pasando al 100%:
+El proyecto cuenta con **46 pruebas unitarias y de integración** pasando al 100%:
 
 ```bash
 PYTHONPATH=airflow:api .venv/bin/pytest tests/ -vv
 ```
 
-### Cobertura de Tests:
+### Cobertura de Tests (7 Módulos):
 * `tests/test_roles_permissions.py` (13 tests): Valida permisos positivos y negativos de cada rol (`role_ingestion`, `role_transformation`, `role_api_reader`, `role_chat_reader`, `role_api_logger`).
+* `tests/test_api_rbac.py` (12 tests): Valida autenticación JWT, rechazo 401 en `/api/stream` sin token, restricción 403 a cuarentena para `viewer`, acceso 200 para `admin`, telemetría de `/api/pipeline/status` y endpoint de anomalías `/api/anomalies`.
+* `tests/test_ai_validation.py` (4 tests): Valida fidelidad numérica anti-alucinaciones en reportes diarios, esquemas Pydantic y sanitización de inputs contra prompt injection.
 * `tests/test_minio_parquet.py` (5 tests): Valida particionamiento Medallion en Parquet, compresión Snappy, deduplicación de eventos y resiliencia no bloqueante ante fallos de conexión.
-* `tests/test_quality.py` (5 tests): Valida circuit breaker a nivel lote (esquema, volumen, frescura), aislamiento a nivel fila en cuarentena con Pandera `lazy=True` y serialización datetime en payloads JSONB.
-* `tests/test_transform.py` (5 tests): Valida extracción de región, clasificación de magnitud, radio de impacto PGA y hashing SHA-256.
+* `tests/test_quality.py` (5 tests): Valida circuit breaker a nivel lote (esquema, volumen, frescura real), aislamiento a nivel fila en cuarentena con Pandera `lazy=True` y serialización datetime.
+* `tests/test_transform.py` (5 tests): Valida extracción de región, clasificación de magnitud estándar, radio de impacto físico PGA ($R = 10^{0.45 \cdot M - 0.8}$) y hashing SHA-256.
 * `tests/test_dags_integrity.py` (2 tests): Valida sintaxis AST e importación limpia en DagBag dentro del contenedor Airflow (4 DAGs sin errores).
-* `tests/test_api_rbac.py` (10 tests): Valida endpoints de FastAPI, tokens JWT, restricción 403 a cuarentena para `viewer`, acceso 200 para `admin`, descarga CSV y guardrail SQL.
 
 ---
 
 ## 🔒 Auditoría de Seguridad y Cero Secretos
 
-* **Gitleaks (Detección de Secretos):** 12 commits escaneados con `0 fugas detectadas`.
-* **Bandit (SAST Python):** Escaneo de código en `api/` y `airflow/include/` con `0 vulnerabilidades`.
-* Reporte oficial disponible en [docs/security_audit.txt](docs/security_audit.txt).
+* **Gitleaks (Detección de Secretos):** Commits escaneados con `0 fugas detectadas` mediante `gitleaks protect -v --staged` y `gitleaks detect -v`.
+* **Bandit (SAST Python):** Escaneo de código en `api/` y `airflow/include/` con `0 vulnerabilidades` de severidad Media o Alta.
+* Reportes detallados disponibles en [docs/security_audit.txt](docs/security_audit.txt) y [docs/AUDITORIA_COMPLETA.md](docs/AUDITORIA_COMPLETA.md).
 
 ---
 
@@ -176,14 +188,14 @@ Para la sustentación ante el Tech Lead o evaluador, utiliza estos argumentos t�
 ├── airflow/
 │   ├── dags/
 │   │   ├── usgs_ingest_feed.py           # Ingesta Bronze cada 5 min & export Parquet
-│   │   ├── usgs_transform_quality.py     # Silver & Gold reactivo & export Parquet
+│   │   ├── usgs_transform_quality.py     # Silver & Gold reactivo (TaskGroup + Pandera)
 │   │   ├── usgs_historical_backfill.py   # Backfill bajo demanda (Admin)
-│   │   └── usgs_daily_report_anomaly.py  # Reporte diario y Z-score (06:00 UTC)
+│   │   └── usgs_daily_report_anomaly.py  # Reporte diario LLM, validación numérica Pydantic y Z-score
 │   ├── include/
-│   │   ├── db.py                         # Conexiones e inserciones idempotentes
+│   │   ├── db.py                         # Conexiones POLP e inserciones idempotentes
 │   │   ├── minio_exporter.py             # Exportador Parquet Snappy Medallion a MinIO
 │   │   ├── transform.py                  # Normalización, PGA impact radius
-│   │   ├── quality.py                    # Reglas Pandera en dos niveles
+│   │   ├── quality.py                    # Reglas Pandera en dos niveles y cuarentena
 │   │   ├── callbacks.py                  # Webhooks de alerta
 │   │   └── openmetadata_emitter.py       # Emisor de linaje JSON
 │   ├── Dockerfile
@@ -196,8 +208,13 @@ Para la sustentación ante el Tech Lead o evaluador, utiliza estos argumentos t�
 │   ├── db.py                             # Conexiones POLP (reader, chat, logger)
 │   ├── Dockerfile
 │   └── main.py
+├── prompts/                              # Plantillas versionadas de prompts para el LLM
+│   ├── daily_report_system.txt           # Directivas del analista sismológico diario
+│   ├── daily_report_user.txt             # Plantilla de inyección con métricas exactas
+│   ├── chat_text_to_sql_system.txt       # Reglas Text-to-SQL con whitelist y catalog
+│   └── chat_grounded_answer_system.txt   # Síntesis conversacional estricta grounded
 ├── web/
-│   ├── src/components/                   # UI React (Map PGA, Charts, Chat, Quarantine)
+│   ├── src/components/                   # UI React (Map PGA, Charts, Chat, Quarantine, KPIs)
 │   ├── nginx.conf                        # Reverse proxy + SSE no buffering
 │   ├── Dockerfile
 │   └── package.json
@@ -205,10 +222,18 @@ Para la sustentación ante el Tech Lead o evaluador, utiliza estos argumentos t�
 │   ├── 01_schemas_and_roles.sql          # POLP y restricciones de sesión
 │   └── 02_tables_and_views.sql           # Tablas Medallion y Vistas Gold
 ├── docs/
-│   ├── ARQUITECTURA.md                   # Especificación técnica Medallion
+│   ├── ARQUITECTURA.md                   # Especificación técnica Medallion y ERD
+│   ├── AUDITORIA_COMPLETA.md             # Matriz de auditoría exhaustiva y resoluciones
 │   ├── OPENMETADATA.md                   # Linaje y gobernanza
-│   └── security_audit.txt                # Reporte Bandit & Gitleaks
-├── tests/                                # 40 pruebas unitarias y de integración
+│   └── security_audit.txt                # Evidencia real de Gitleaks, Bandit, Pip-audit, Npm audit
+├── tests/                                # 46 pruebas automatizadas (7 suites de integración y unitarias)
+│   ├── test_ai_validation.py             # Verificación de cifras Pydantic y mitigación de alucinaciones
+│   ├── test_api_rbac.py                  # Autenticación JWT y matriz de permisos
+│   ├── test_dags_integrity.py            # Sintaxis e integridad de DAGs en Airflow
+│   ├── test_gold_aggregation.py          # Cálculo de KPIs y agregaciones analíticas
+│   ├── test_quality_rules.py             # Validaciones Pandera a nivel lote y fila
+│   ├── test_roles_permissions.py         # Mínimo privilegio (POLP) en PostgreSQL
+│   └── test_transformations.py           # Fórmulas sismológicas y clasificación de magnitud
 ├── docker-compose.yml                    # Orquestación de todo el stack
 ├── PLAN.md                               # Plan de ejecución y matriz de trazabilidad
 └── README.md
